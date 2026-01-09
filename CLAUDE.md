@@ -23,6 +23,7 @@ npm run dev        # ビルド + 実行
 2. **MCPツール**:
    - `request_approval`: ボタン付きメッセージで承認/否認を取得（`awaitMessageComponent`）
    - `notify`: 単方向通知送信
+   - `ask_question`: SelectMenu付きメッセージで複数選択肢から回答を取得
 3. **MCPサーバー**: stdio transportでClaude Codeと通信
 
 ## 環境変数

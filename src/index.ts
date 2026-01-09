@@ -1,248 +1,60 @@
-import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import {
-  CallToolRequestSchema,
-  ListToolsRequestSchema,
-} from '@modelcontextprotocol/sdk/types.js';
-import {
-  Client,
-  GatewayIntentBits,
-  ButtonBuilder,
-  ButtonStyle,
-  ActionRowBuilder,
-  TextChannel,
-  ComponentType,
-  Events,
-} from 'discord.js';
-
-// 環境変数チェック
-const DISCORD_BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
-const DISCORD_CHANNEL_ID = process.env.DISCORD_CHANNEL_ID;
-
-if (!DISCORD_BOT_TOKEN || !DISCORD_CHANNEL_ID) {
-  console.error('Error: DISCORD_BOT_TOKEN and DISCORD_CHANNEL_ID are required');
-  process.exit(1);
-}
-
-// Discord クライアント初期化
-const client = new Client({
-  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages],
-});
-
-let channel: TextChannel | null = null;
-let isReady = false;
-
-// Discord 接続完了を待つ Promise
-const discordReady = new Promise<void>((resolve, reject) => {
-  const timeout = setTimeout(() => {
-    reject(new Error('Discord connection timeout'));
-  }, 30000);
-
-  client.once(Events.ClientReady, (readyClient) => {
-    clearTimeout(timeout);
-    console.error(`Discord Bot logged in as ${readyClient.user.tag}`);
-    
-    const ch = client.channels.cache.get(DISCORD_CHANNEL_ID!);
-    if (!ch || !(ch instanceof TextChannel)) {
-      reject(new Error(`Channel ${DISCORD_CHANNEL_ID} not found or is not a text channel`));
-      return;
-    }
-    
-    channel = ch;
-    isReady = true;
-    resolve();
-  });
-
-  client.once(Events.Error, (error) => {
-    clearTimeout(timeout);
-    reject(error);
-  });
-});
-
-// Discord にログイン
-client.login(DISCORD_BOT_TOKEN).catch((error) => {
-  console.error('Failed to login to Discord:', error);
-  process.exit(1);
-});
+import { createDiscordAdapter } from './discord-adapter.js';
+import { createToolHandlers } from './handlers.js';
+import { createMcpServer } from './mcp-server.js';
 
 /**
- * 承認リクエストを送信し、ユーザーの応答を待つ
+ * 設定を読み込む
  */
-async function requestApproval(
-  message: string,
-  timeoutSec = 300
-): Promise<{ approved: boolean; timedOut: boolean; error?: string }> {
-  if (!isReady || !channel) {
-    return { approved: false, timedOut: false, error: 'Discord not connected' };
+function loadConfig(): { token: string; channelId: string } {
+  const token = process.env.DISCORD_BOT_TOKEN;
+  const channelId = process.env.DISCORD_CHANNEL_ID;
+
+  if (!token || !channelId) {
+    throw new Error('DISCORD_BOT_TOKEN and DISCORD_CHANNEL_ID are required');
   }
 
-  try {
-    const approveBtn = new ButtonBuilder()
-      .setCustomId('approve')
-      .setLabel('✅ 承認')
-      .setStyle(ButtonStyle.Success);
-
-    const denyBtn = new ButtonBuilder()
-      .setCustomId('deny')
-      .setLabel('❌ 否認')
-      .setStyle(ButtonStyle.Danger);
-
-    const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
-      approveBtn,
-      denyBtn
-    );
-
-    const sent = await channel.send({
-      content: `🔔 **承認リクエスト**\n\n${message}`,
-      components: [row],
-    });
-
-    try {
-      const interaction = await sent.awaitMessageComponent({
-        componentType: ComponentType.Button,
-        time: timeoutSec * 1000,
-      });
-
-      const approved = interaction.customId === 'approve';
-
-      await interaction.update({
-        content: `${approved ? '✅' : '❌'} **${approved ? '承認' : '否認'}済み**\n\n~~${message}~~`,
-        components: [],
-      });
-
-      return { approved, timedOut: false };
-    } catch {
-      // タイムアウト
-      await sent.edit({
-        content: `⏰ **タイムアウト**\n\n~~${message}~~`,
-        components: [],
-      });
-      return { approved: false, timedOut: true };
-    }
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    return { approved: false, timedOut: false, error: errorMessage };
-  }
+  return { token, channelId };
 }
 
 /**
- * 通知を送信（応答不要）
+ * メイン関数
  */
-async function notify(message: string): Promise<{ success: boolean; error?: string }> {
-  if (!isReady || !channel) {
-    return { success: false, error: 'Discord not connected' };
-  }
+async function main(): Promise<void> {
+  // 設定を読み込む
+  const config = loadConfig();
 
-  try {
-    await channel.send(`📢 ${message}`);
-    return { success: true };
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    return { success: false, error: errorMessage };
-  }
+  // Discord Adapter を作成
+  const adapter = createDiscordAdapter(config);
+
+  // ツールハンドラーを作成
+  const handlers = createToolHandlers(adapter);
+
+  // MCP サーバーを作成
+  const server = createMcpServer(handlers);
+
+  // Discord に接続
+  await adapter.connect();
+
+  // MCP サーバーを起動
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+  console.error('MCP Discord Approval Server started');
 }
-
-// MCP サーバー設定
-const server = new Server(
-  { name: 'discord-approval', version: '1.0.0' },
-  { capabilities: { tools: {} } }
-);
-
-server.setRequestHandler(ListToolsRequestSchema, async () => ({
-  tools: [
-    {
-      name: 'request_approval',
-      description:
-        'Discordに承認リクエストを送信し、ユーザーの応答（承認/否認）を待つ。ユーザーの確認が必要な操作の前に使用する。',
-      inputSchema: {
-        type: 'object' as const,
-        properties: {
-          message: {
-            type: 'string',
-            description: '確認したい内容（何を承認するのかを明確に記述）',
-          },
-          timeout: {
-            type: 'number',
-            description: 'タイムアウト秒数（デフォルト300秒＝5分）',
-          },
-        },
-        required: ['message'],
-      },
-    },
-    {
-      name: 'notify',
-      description:
-        'Discordに通知を送信する（応答不要）。処理の完了報告やステータス更新に使用する。',
-      inputSchema: {
-        type: 'object' as const,
-        properties: {
-          message: {
-            type: 'string',
-            description: '通知メッセージ',
-          },
-        },
-        required: ['message'],
-      },
-    },
-  ],
-}));
-
-server.setRequestHandler(CallToolRequestSchema, async (request) => {
-  // Discord 接続を待つ
-  await discordReady;
-
-  const { name, arguments: args } = request.params;
-
-  if (name === 'request_approval') {
-    const { message, timeout = 300 } = args as {
-      message: string;
-      timeout?: number;
-    };
-    const result = await requestApproval(message, timeout);
-
-    let responseText: string;
-    if (result.error) {
-      responseText = `エラー: ${result.error}`;
-    } else if (result.timedOut) {
-      responseText = 'タイムアウト: ユーザーからの応答がありませんでした';
-    } else {
-      responseText = result.approved ? '承認されました' : '否認されました';
-    }
-
-    return {
-      content: [{ type: 'text', text: responseText }],
-    };
-  }
-
-  if (name === 'notify') {
-    const { message } = args as { message: string };
-    const result = await notify(message);
-
-    return {
-      content: [
-        {
-          type: 'text',
-          text: result.success
-            ? '通知を送信しました'
-            : `通知の送信に失敗: ${result.error}`,
-        },
-      ],
-    };
-  }
-
-  throw new Error(`Unknown tool: ${name}`);
-});
 
 // エラーハンドリング
 process.on('uncaughtException', (error) => {
   console.error('Uncaught exception:', error);
+  process.exit(1);
 });
 
 process.on('unhandledRejection', (reason) => {
   console.error('Unhandled rejection:', reason);
+  process.exit(1);
 });
 
-// MCP サーバー起動
-const transport = new StdioServerTransport();
-await server.connect(transport);
-console.error('MCP Discord Approval Server started');
+// メイン関数を実行
+main().catch((error) => {
+  console.error('Failed to start server:', error);
+  process.exit(1);
+});

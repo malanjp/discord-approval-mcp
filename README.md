@@ -79,6 +79,23 @@ Get user approval before deploying to production
 
 → A message with buttons will be sent to Discord, waiting for approval/denial
 
+## CLAUDE.md Configuration
+
+To make Claude Code automatically use these tools, add the following to your `~/.claude/CLAUDE.md`:
+
+```markdown
+### discord-approval
+
+Use `mcp__discord-approval__request_approval` for approval in these situations:
+- Before deploying to production
+- Before running database migrations
+- Before bulk file deletions
+- Before other irreversible operations
+- When asking the user a question
+
+Use `mcp__discord-approval__notify` when long-running tasks (builds, tests, etc.) complete.
+```
+
 ## License
 
 MIT

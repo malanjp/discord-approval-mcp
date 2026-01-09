@@ -79,6 +79,23 @@ Claude Codeで:
 
 → Discordにボタン付きメッセージが送信され、承認/否認を待機
 
+## CLAUDE.md 設定
+
+Claude Code が自動的にこれらのツールを使用するよう、`~/.claude/CLAUDE.md` に以下を追加してください:
+
+```markdown
+### discord-approval
+
+以下の場面では `mcp__discord-approval__request_approval` ツールで承認を取得してください:
+- 本番環境へのデプロイ前
+- データベースのマイグレーション実行前
+- ファイルの一括削除前
+- その他、取り消しが難しい操作の前
+- ユーザに質問するとき
+
+長時間タスク（ビルド、テスト実行など）が完了したら `mcp__discord-approval__notify` で通知してください。
+```
+
 ## ライセンス
 
 MIT

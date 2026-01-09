@@ -42,6 +42,21 @@ export type CancelReminderResult = {
 };
 
 /**
+ * ステータス通知のステータス種別
+ */
+export type NotificationStatus = 'success' | 'error' | 'warning' | 'info';
+
+/**
+ * テキスト入力リクエストの結果
+ */
+export type TextInputResult = {
+  text: string | null;
+  timedOut: boolean;
+  cancelled: boolean;
+  error?: string;
+};
+
+/**
  * Discord 操作を抽象化するアダプター
  *
  * テスト時にはモック実装を注入することで、
@@ -76,6 +91,22 @@ export type DiscordAdapter = {
   /** スケジュール済みリマインダーをキャンセルする */
   cancelReminder: (reminderId: string) => Promise<CancelReminderResult>;
 
+  /** ステータス付き通知を送信（Embed形式） */
+  sendStatusNotification: (
+    message: string,
+    status: NotificationStatus,
+    details?: string
+  ) => Promise<NotifyResult>;
+
+  /** テキスト入力をリクエストし、ユーザーの入力を待つ */
+  sendTextInputRequest: (
+    title: string,
+    prompt: string,
+    placeholder: string | undefined,
+    multiline: boolean,
+    timeoutSec: number
+  ) => Promise<TextInputResult>;
+
   /** Discord に接続する */
   connect: () => Promise<void>;
 
@@ -102,4 +133,16 @@ export type ToolHandlers = {
     delaySeconds: number
   ) => Promise<ReminderResult>;
   cancelReminder: (reminderId: string) => Promise<CancelReminderResult>;
+  notifyWithStatus: (
+    message: string,
+    status: NotificationStatus,
+    details?: string
+  ) => Promise<NotifyResult>;
+  requestTextInput: (
+    title: string,
+    prompt: string,
+    placeholder?: string,
+    multiline?: boolean,
+    timeout?: number
+  ) => Promise<TextInputResult>;
 };

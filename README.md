@@ -102,6 +102,32 @@ Cancels a scheduled reminder.
 
 **Returns**: Success / Error message
 
+### `notify_with_status`
+
+Sends a notification with status using Discord Embed (color-coded).
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| message | string | ✅ | The notification message |
+| status | string | ✅ | Status type: `success` (green), `error` (red), `warning` (yellow), `info` (blue) |
+| details | string | - | Additional details (optional) |
+
+**Returns**: Success / Error message
+
+### `request_text_input`
+
+Requests text input from the user via Discord Modal dialog.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| title | string | ✅ | Modal title (max 45 characters) |
+| prompt | string | ✅ | Message prompting for input |
+| placeholder | string | - | Placeholder text (max 100 characters) |
+| multiline | boolean | - | Allow multiline input (default: false) |
+| timeout | number | - | Timeout in seconds (default: 300, max: 900) |
+
+**Returns**: The entered text / `Cancelled` / `Timeout`
+
 ## Usage Example
 
 In Claude Code:
@@ -131,6 +157,17 @@ Use `mcp__discord-approval__ask_question` when you need the user to choose from 
 - Choosing configuration values
 
 Use `mcp__discord-approval__notify` when long-running tasks (builds, tests, etc.) complete.
+
+Use `mcp__discord-approval__notify_with_status` for rich notifications with status indicators:
+- Success notifications (green) for completed tasks
+- Error notifications (red) for failures
+- Warning notifications (yellow) for potential issues
+- Info notifications (blue) for general information
+
+Use `mcp__discord-approval__request_text_input` when you need free-form text input:
+- Gathering error details from the user
+- Requesting additional requirements
+- Getting commit message modifications
 
 ## When to actively use discord approval mcp
 

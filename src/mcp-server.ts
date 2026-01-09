@@ -3,7 +3,7 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
-import type { ToolHandlers } from './types.js';
+import type { ToolHandlers, NotificationStatus } from './types.js';
 
 /**
  * MCP サーバーを作成する
@@ -110,6 +110,61 @@ export function createMcpServer(handlers: ToolHandlers): Server {
           required: ['reminder_id'],
         },
       },
+      {
+        name: 'notify_with_status',
+        description:
+          'Discordにステータス付き通知を送信する（Embed形式）。処理結果の報告（成功/エラー/警告/情報）に使用する。',
+        inputSchema: {
+          type: 'object' as const,
+          properties: {
+            message: {
+              type: 'string',
+              description: '通知メッセージ（メインの内容）',
+            },
+            status: {
+              type: 'string',
+              enum: ['success', 'error', 'warning', 'info'],
+              description: 'ステータス（success=緑, error=赤, warning=黄, info=青）',
+            },
+            details: {
+              type: 'string',
+              description: '追加の詳細情報（オプション）',
+            },
+          },
+          required: ['message', 'status'],
+        },
+      },
+      {
+        name: 'request_text_input',
+        description:
+          'Discordでテキスト入力を要求する。Modalダイアログでユーザーにテキストを入力してもらう。エラー原因のヒアリング、追加要件の確認、コミットメッセージの修正依頼などに使用する。',
+        inputSchema: {
+          type: 'object' as const,
+          properties: {
+            title: {
+              type: 'string',
+              description: 'Modalのタイトル（45文字以内）',
+            },
+            prompt: {
+              type: 'string',
+              description: '入力を促すメッセージ',
+            },
+            placeholder: {
+              type: 'string',
+              description: '入力欄のプレースホルダー（100文字以内、省略可）',
+            },
+            multiline: {
+              type: 'boolean',
+              description: '複数行入力を許可するか（デフォルトfalse）',
+            },
+            timeout: {
+              type: 'number',
+              description: 'タイムアウト秒数（デフォルト300秒、最大900秒）',
+            },
+          },
+          required: ['title', 'prompt'],
+        },
+      },
     ],
   }));
 
@@ -211,6 +266,58 @@ export function createMcpServer(handlers: ToolHandlers): Server {
               : `キャンセルに失敗: ${result.error}`,
           },
         ],
+      };
+    }
+
+    if (name === 'notify_with_status') {
+      const { message, status, details } = args as {
+        message: string;
+        status: NotificationStatus;
+        details?: string;
+      };
+      const result = await handlers.notifyWithStatus(message, status, details);
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: result.success
+              ? 'ステータス通知を送信しました'
+              : `ステータス通知の送信に失敗: ${result.error}`,
+          },
+        ],
+      };
+    }
+
+    if (name === 'request_text_input') {
+      const { title, prompt, placeholder, multiline = false, timeout = 300 } = args as {
+        title: string;
+        prompt: string;
+        placeholder?: string;
+        multiline?: boolean;
+        timeout?: number;
+      };
+      const result = await handlers.requestTextInput(
+        title,
+        prompt,
+        placeholder,
+        multiline,
+        timeout
+      );
+
+      let responseText: string;
+      if (result.error) {
+        responseText = `エラー: ${result.error}`;
+      } else if (result.timedOut) {
+        responseText = 'タイムアウト: ユーザーからの応答がありませんでした';
+      } else if (result.cancelled) {
+        responseText = 'キャンセル: ユーザーが入力をキャンセルしました';
+      } else {
+        responseText = `入力テキスト:\n${result.text}`;
+      }
+
+      return {
+        content: [{ type: 'text', text: responseText }],
       };
     }
 

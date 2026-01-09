@@ -6,6 +6,8 @@ import type {
   ReminderResult,
   CancelReminderResult,
   ToolHandlers,
+  NotificationStatus,
+  TextInputResult,
 } from './types.js';
 
 /**
@@ -98,6 +100,93 @@ export function createToolHandlers(adapter: DiscordAdapter): ToolHandlers {
       }
 
       return adapter.cancelReminder(reminderId);
+    },
+
+    /**
+     * ステータス付き通知を送信（Embed形式）
+     */
+    async notifyWithStatus(
+      message: string,
+      status: NotificationStatus,
+      details?: string
+    ): Promise<NotifyResult> {
+      if (!adapter.isReady()) {
+        return { success: false, error: 'Discord not connected' };
+      }
+
+      const validStatuses: NotificationStatus[] = ['success', 'error', 'warning', 'info'];
+      if (!validStatuses.includes(status)) {
+        return {
+          success: false,
+          error: `無効なステータスです。有効な値: ${validStatuses.join(', ')}`,
+        };
+      }
+
+      return adapter.sendStatusNotification(message, status, details);
+    },
+
+    /**
+     * テキスト入力をリクエストし、ユーザーの入力を待つ
+     */
+    async requestTextInput(
+      title: string,
+      prompt: string,
+      placeholder?: string,
+      multiline = false,
+      timeout = 300
+    ): Promise<TextInputResult> {
+      if (!adapter.isReady()) {
+        return {
+          text: null,
+          timedOut: false,
+          cancelled: false,
+          error: 'Discord not connected',
+        };
+      }
+
+      // バリデーション
+      if (!title || title.trim().length === 0) {
+        return {
+          text: null,
+          timedOut: false,
+          cancelled: false,
+          error: 'タイトルは必須です',
+        };
+      }
+      if (title.length > 45) {
+        return {
+          text: null,
+          timedOut: false,
+          cancelled: false,
+          error: 'タイトルは45文字以内にしてください',
+        };
+      }
+      if (!prompt || prompt.trim().length === 0) {
+        return {
+          text: null,
+          timedOut: false,
+          cancelled: false,
+          error: 'プロンプトは必須です',
+        };
+      }
+      if (placeholder && placeholder.length > 100) {
+        return {
+          text: null,
+          timedOut: false,
+          cancelled: false,
+          error: 'プレースホルダーは100文字以内にしてください',
+        };
+      }
+      if (timeout < 1 || timeout > 900) {
+        return {
+          text: null,
+          timedOut: false,
+          cancelled: false,
+          error: 'タイムアウトは1〜900秒の範囲で指定してください',
+        };
+      }
+
+      return adapter.sendTextInputRequest(title, prompt, placeholder, multiline, timeout);
     },
   };
 }

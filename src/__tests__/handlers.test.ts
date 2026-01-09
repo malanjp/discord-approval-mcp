@@ -21,6 +21,10 @@ function createMockAdapter(
       .fn()
       .mockResolvedValue({ reminderId: 'test-id-123', success: true }),
     cancelReminder: vi.fn().mockResolvedValue({ success: true }),
+    sendStatusNotification: vi.fn().mockResolvedValue({ success: true }),
+    sendTextInputRequest: vi
+      .fn()
+      .mockResolvedValue({ text: 'test input', timedOut: false, cancelled: false }),
     connect: vi.fn().mockResolvedValue(undefined),
     disconnect: vi.fn().mockResolvedValue(undefined),
     ...overrides,
@@ -363,6 +367,296 @@ describe('createToolHandlers', () => {
 
       expect(result.success).toBe(true);
       expect(adapter.cancelReminder).toHaveBeenCalledWith('valid-id');
+    });
+  });
+
+  describe('notifyWithStatus', () => {
+    it('Discord 未接続時はエラーを返す', async () => {
+      const adapter = createMockAdapter({ isReady: () => false });
+      const handlers = createToolHandlers(adapter);
+
+      const result = await handlers.notifyWithStatus('テスト', 'success');
+
+      expect(result).toEqual({
+        success: false,
+        error: 'Discord not connected',
+      });
+      expect(adapter.sendStatusNotification).not.toHaveBeenCalled();
+    });
+
+    it('success ステータスで通知送信成功', async () => {
+      const adapter = createMockAdapter();
+      const handlers = createToolHandlers(adapter);
+
+      const result = await handlers.notifyWithStatus('ビルド完了', 'success');
+
+      expect(result.success).toBe(true);
+      expect(adapter.sendStatusNotification).toHaveBeenCalledWith(
+        'ビルド完了',
+        'success',
+        undefined
+      );
+    });
+
+    it('error ステータスで通知送信成功', async () => {
+      const adapter = createMockAdapter();
+      const handlers = createToolHandlers(adapter);
+
+      const result = await handlers.notifyWithStatus(
+        'ビルド失敗',
+        'error',
+        'npm install でエラー'
+      );
+
+      expect(result.success).toBe(true);
+      expect(adapter.sendStatusNotification).toHaveBeenCalledWith(
+        'ビルド失敗',
+        'error',
+        'npm install でエラー'
+      );
+    });
+
+    it('warning ステータスで通知送信成功', async () => {
+      const adapter = createMockAdapter();
+      const handlers = createToolHandlers(adapter);
+
+      const result = await handlers.notifyWithStatus('非推奨APIの使用', 'warning');
+
+      expect(result.success).toBe(true);
+      expect(adapter.sendStatusNotification).toHaveBeenCalledWith(
+        '非推奨APIの使用',
+        'warning',
+        undefined
+      );
+    });
+
+    it('info ステータスで通知送信成功', async () => {
+      const adapter = createMockAdapter();
+      const handlers = createToolHandlers(adapter);
+
+      const result = await handlers.notifyWithStatus('処理開始', 'info');
+
+      expect(result.success).toBe(true);
+      expect(adapter.sendStatusNotification).toHaveBeenCalledWith(
+        '処理開始',
+        'info',
+        undefined
+      );
+    });
+
+    it('無効なステータスの場合はエラーを返す', async () => {
+      const adapter = createMockAdapter();
+      const handlers = createToolHandlers(adapter);
+
+      // @ts-expect-error 無効なステータスをテスト
+      const result = await handlers.notifyWithStatus('テスト', 'invalid');
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('無効なステータス');
+      expect(adapter.sendStatusNotification).not.toHaveBeenCalled();
+    });
+
+    it('details パラメータが正しく渡される', async () => {
+      const adapter = createMockAdapter();
+      const handlers = createToolHandlers(adapter);
+
+      await handlers.notifyWithStatus(
+        'テスト完了',
+        'success',
+        'すべて25件のテストがパス'
+      );
+
+      expect(adapter.sendStatusNotification).toHaveBeenCalledWith(
+        'テスト完了',
+        'success',
+        'すべて25件のテストがパス'
+      );
+    });
+
+    it('送信失敗時はエラーを返す', async () => {
+      const adapter = createMockAdapter({
+        sendStatusNotification: vi
+          .fn()
+          .mockResolvedValue({ success: false, error: 'Network error' }),
+      });
+      const handlers = createToolHandlers(adapter);
+
+      const result = await handlers.notifyWithStatus('テスト', 'success');
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('Network error');
+    });
+  });
+
+  describe('requestTextInput', () => {
+    it('Discord 未接続時はエラーを返す', async () => {
+      const adapter = createMockAdapter({ isReady: () => false });
+      const handlers = createToolHandlers(adapter);
+
+      const result = await handlers.requestTextInput('タイトル', 'プロンプト');
+
+      expect(result).toEqual({
+        text: null,
+        timedOut: false,
+        cancelled: false,
+        error: 'Discord not connected',
+      });
+      expect(adapter.sendTextInputRequest).not.toHaveBeenCalled();
+    });
+
+    it('タイトルが空の場合はエラーを返す', async () => {
+      const adapter = createMockAdapter();
+      const handlers = createToolHandlers(adapter);
+
+      const result = await handlers.requestTextInput('', 'プロンプト');
+
+      expect(result.error).toBe('タイトルは必須です');
+      expect(adapter.sendTextInputRequest).not.toHaveBeenCalled();
+    });
+
+    it('タイトルが45文字を超える場合はエラーを返す', async () => {
+      const adapter = createMockAdapter();
+      const handlers = createToolHandlers(adapter);
+      const longTitle = 'a'.repeat(46);
+
+      const result = await handlers.requestTextInput(longTitle, 'プロンプト');
+
+      expect(result.error).toBe('タイトルは45文字以内にしてください');
+      expect(adapter.sendTextInputRequest).not.toHaveBeenCalled();
+    });
+
+    it('プロンプトが空の場合はエラーを返す', async () => {
+      const adapter = createMockAdapter();
+      const handlers = createToolHandlers(adapter);
+
+      const result = await handlers.requestTextInput('タイトル', '');
+
+      expect(result.error).toBe('プロンプトは必須です');
+      expect(adapter.sendTextInputRequest).not.toHaveBeenCalled();
+    });
+
+    it('プレースホルダーが100文字を超える場合はエラーを返す', async () => {
+      const adapter = createMockAdapter();
+      const handlers = createToolHandlers(adapter);
+      const longPlaceholder = 'a'.repeat(101);
+
+      const result = await handlers.requestTextInput(
+        'タイトル',
+        'プロンプト',
+        longPlaceholder
+      );
+
+      expect(result.error).toBe('プレースホルダーは100文字以内にしてください');
+      expect(adapter.sendTextInputRequest).not.toHaveBeenCalled();
+    });
+
+    it('タイムアウトが範囲外の場合はエラーを返す（0秒）', async () => {
+      const adapter = createMockAdapter();
+      const handlers = createToolHandlers(adapter);
+
+      const result = await handlers.requestTextInput(
+        'タイトル',
+        'プロンプト',
+        undefined,
+        false,
+        0
+      );
+
+      expect(result.error).toBe('タイムアウトは1〜900秒の範囲で指定してください');
+      expect(adapter.sendTextInputRequest).not.toHaveBeenCalled();
+    });
+
+    it('タイムアウトが範囲外の場合はエラーを返す（901秒）', async () => {
+      const adapter = createMockAdapter();
+      const handlers = createToolHandlers(adapter);
+
+      const result = await handlers.requestTextInput(
+        'タイトル',
+        'プロンプト',
+        undefined,
+        false,
+        901
+      );
+
+      expect(result.error).toBe('タイムアウトは1〜900秒の範囲で指定してください');
+      expect(adapter.sendTextInputRequest).not.toHaveBeenCalled();
+    });
+
+    it('正常にテキスト入力された場合は text を返す', async () => {
+      const adapter = createMockAdapter({
+        sendTextInputRequest: vi.fn().mockResolvedValue({
+          text: 'ユーザー入力テキスト',
+          timedOut: false,
+          cancelled: false,
+        }),
+      });
+      const handlers = createToolHandlers(adapter);
+
+      const result = await handlers.requestTextInput(
+        'タイトル',
+        'プロンプト',
+        'ヒント',
+        true,
+        120
+      );
+
+      expect(result.text).toBe('ユーザー入力テキスト');
+      expect(result.timedOut).toBe(false);
+      expect(result.cancelled).toBe(false);
+      expect(adapter.sendTextInputRequest).toHaveBeenCalledWith(
+        'タイトル',
+        'プロンプト',
+        'ヒント',
+        true,
+        120
+      );
+    });
+
+    it('タイムアウト時は timedOut: true を返す', async () => {
+      const adapter = createMockAdapter({
+        sendTextInputRequest: vi.fn().mockResolvedValue({
+          text: null,
+          timedOut: true,
+          cancelled: false,
+        }),
+      });
+      const handlers = createToolHandlers(adapter);
+
+      const result = await handlers.requestTextInput('タイトル', 'プロンプト');
+
+      expect(result.text).toBeNull();
+      expect(result.timedOut).toBe(true);
+    });
+
+    it('キャンセル時は cancelled: true を返す', async () => {
+      const adapter = createMockAdapter({
+        sendTextInputRequest: vi.fn().mockResolvedValue({
+          text: null,
+          timedOut: false,
+          cancelled: true,
+        }),
+      });
+      const handlers = createToolHandlers(adapter);
+
+      const result = await handlers.requestTextInput('タイトル', 'プロンプト');
+
+      expect(result.text).toBeNull();
+      expect(result.cancelled).toBe(true);
+    });
+
+    it('デフォルト値が正しく使用される', async () => {
+      const adapter = createMockAdapter();
+      const handlers = createToolHandlers(adapter);
+
+      await handlers.requestTextInput('タイトル', 'プロンプト');
+
+      expect(adapter.sendTextInputRequest).toHaveBeenCalledWith(
+        'タイトル',
+        'プロンプト',
+        undefined,
+        false,
+        300
+      );
     });
   });
 });

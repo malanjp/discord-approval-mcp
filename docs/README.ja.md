@@ -102,6 +102,32 @@ npm run build
 
 **戻り値**: 成功 / エラーメッセージ
 
+### `notify_with_status`
+
+ステータス付き通知を送信する（Discord Embed形式、色分け表示）。
+
+| パラメータ | 型 | 必須 | 説明 |
+|-----------|------|------|------|
+| message | string | ✅ | 通知メッセージ |
+| status | string | ✅ | ステータス: `success`(緑), `error`(赤), `warning`(黄), `info`(青) |
+| details | string | - | 追加の詳細情報（任意） |
+
+**戻り値**: 成功 / エラーメッセージ
+
+### `request_text_input`
+
+Discord Modalダイアログでユーザーにテキスト入力を要求する。
+
+| パラメータ | 型 | 必須 | 説明 |
+|-----------|------|------|------|
+| title | string | ✅ | Modalのタイトル（45文字以内） |
+| prompt | string | ✅ | 入力を促すメッセージ |
+| placeholder | string | - | 入力欄のプレースホルダー（100文字以内） |
+| multiline | boolean | - | 複数行入力を許可（デフォルト: false） |
+| timeout | number | - | タイムアウト秒数（デフォルト: 300、最大: 900） |
+
+**戻り値**: 入力されたテキスト / `キャンセル` / `タイムアウト`
+
 ## 使用例
 
 Claude Codeで:
@@ -131,6 +157,17 @@ Claude Code が自動的にこれらのツールを使用するよう、`~/.clau
 - 設定値の選択
 
 長時間タスク（ビルド、テスト実行など）が完了したら `mcp__discord-approval__notify` で通知してください。
+
+ステータス付きのリッチな通知には `mcp__discord-approval__notify_with_status` を使用してください:
+- 成功通知（緑）: タスク完了時
+- エラー通知（赤）: 失敗時
+- 警告通知（黄）: 潜在的な問題の報告
+- 情報通知（青）: 一般的な情報
+
+自由記述のテキスト入力が必要な場合は `mcp__discord-approval__request_text_input` を使用してください:
+- エラーの詳細をユーザーから収集
+- 追加要件の確認
+- コミットメッセージの修正依頼
 
 ## discord approval mcp を積極的に使うシーン
 

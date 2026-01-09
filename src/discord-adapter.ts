@@ -9,6 +9,10 @@ import {
   Events,
   StringSelectMenuBuilder,
   StringSelectMenuOptionBuilder,
+  EmbedBuilder,
+  ModalBuilder,
+  TextInputBuilder,
+  TextInputStyle,
 } from 'discord.js';
 import { randomUUID } from 'crypto';
 import type {
@@ -18,7 +22,22 @@ import type {
   QuestionResult,
   ReminderResult,
   CancelReminderResult,
+  NotificationStatus,
+  TextInputResult,
 } from './types.js';
+
+/**
+ * ステータスと色・絵文字のマッピング
+ */
+const STATUS_CONFIG: Record<
+  NotificationStatus,
+  { color: number; emoji: string; title: string }
+> = {
+  success: { color: 0x57f287, emoji: '✅', title: '成功' },
+  error: { color: 0xed4245, emoji: '❌', title: 'エラー' },
+  warning: { color: 0xfee75c, emoji: '⚠️', title: '警告' },
+  info: { color: 0x5865f2, emoji: 'ℹ️', title: '情報' },
+};
 
 export type DiscordAdapterConfig = {
   token: string;
@@ -316,6 +335,154 @@ export function createDiscordAdapter(config: DiscordAdapterConfig): DiscordAdapt
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         return { success: false, error: errorMessage };
+      }
+    },
+
+    async sendStatusNotification(
+      message: string,
+      status: NotificationStatus,
+      details?: string
+    ): Promise<NotifyResult> {
+      if (!ready || !channel) {
+        return { success: false, error: 'Discord not connected' };
+      }
+
+      try {
+        const config = STATUS_CONFIG[status];
+
+        const embed = new EmbedBuilder()
+          .setColor(config.color)
+          .setTitle(`${config.emoji} ${config.title}`)
+          .setDescription(message)
+          .setTimestamp();
+
+        if (details) {
+          embed.addFields({ name: '詳細', value: details });
+        }
+
+        await channel.send({ embeds: [embed] });
+        return { success: true };
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        return { success: false, error: errorMessage };
+      }
+    },
+
+    async sendTextInputRequest(
+      title: string,
+      prompt: string,
+      placeholder: string | undefined,
+      multiline: boolean,
+      timeoutSec: number
+    ): Promise<TextInputResult> {
+      if (!ready || !channel) {
+        return {
+          text: null,
+          timedOut: false,
+          cancelled: false,
+          error: 'Discord not connected',
+        };
+      }
+
+      const interactionId = randomUUID();
+
+      try {
+        // Step 1: 入力ボタン付きメッセージを送信
+        const inputBtn = new ButtonBuilder()
+          .setCustomId(`text_input_${interactionId}`)
+          .setLabel('📝 入力する')
+          .setStyle(ButtonStyle.Primary);
+
+        const cancelBtn = new ButtonBuilder()
+          .setCustomId(`text_input_cancel_${interactionId}`)
+          .setLabel('キャンセル')
+          .setStyle(ButtonStyle.Secondary);
+
+        const row = new ActionRowBuilder<ButtonBuilder>().addComponents(inputBtn, cancelBtn);
+
+        const sent = await channel.send({
+          content: `📝 **テキスト入力リクエスト**\n\n${prompt}`,
+          components: [row],
+        });
+
+        try {
+          // Step 2: ボタンのクリックを待つ
+          const buttonInteraction = await sent.awaitMessageComponent({
+            componentType: ComponentType.Button,
+            time: timeoutSec * 1000,
+          });
+
+          // キャンセルボタンが押された場合
+          if (buttonInteraction.customId === `text_input_cancel_${interactionId}`) {
+            await buttonInteraction.update({
+              content: `❌ **キャンセル**\n\n~~${prompt}~~`,
+              components: [],
+            });
+            return { text: null, timedOut: false, cancelled: true };
+          }
+
+          // Step 3: Modalを表示
+          const modal = new ModalBuilder()
+            .setCustomId(`text_input_modal_${interactionId}`)
+            .setTitle(title.slice(0, 45));
+
+          const textInput = new TextInputBuilder()
+            .setCustomId('text_input_value')
+            .setLabel(prompt.slice(0, 45))
+            .setStyle(multiline ? TextInputStyle.Paragraph : TextInputStyle.Short)
+            .setRequired(true);
+
+          if (placeholder) {
+            textInput.setPlaceholder(placeholder.slice(0, 100));
+          }
+
+          const modalRow = new ActionRowBuilder<TextInputBuilder>().addComponents(textInput);
+          modal.addComponents(modalRow);
+
+          await buttonInteraction.showModal(modal);
+
+          // Step 4: Modal送信を待つ
+          const modalSubmit = await buttonInteraction.awaitModalSubmit({
+            time: timeoutSec * 1000,
+            filter: (i) => i.customId === `text_input_modal_${interactionId}`,
+          });
+
+          const text = modalSubmit.fields.getTextInputValue('text_input_value');
+
+          // Modal送信への応答（必須）
+          await modalSubmit.deferUpdate();
+
+          // 元のメッセージを更新
+          await sent.edit({
+            content: `✅ **入力完了**\n\n${prompt}\n\n**入力内容:**\n\`\`\`\n${text.slice(0, 500)}${text.length > 500 ? '...' : ''}\n\`\`\``,
+            components: [],
+          });
+
+          return { text, timedOut: false, cancelled: false };
+        } catch (error) {
+          const isTimeout =
+            error instanceof Error &&
+            (error.message.includes('time') || error.message.includes('Collector'));
+
+          if (isTimeout) {
+            try {
+              await sent.edit({
+                content: `⏰ **タイムアウト**\n\n~~${prompt}~~`,
+                components: [],
+              });
+            } catch (editError) {
+              console.error('Failed to update message after timeout:', editError);
+            }
+            return { text: null, timedOut: true, cancelled: false };
+          }
+
+          console.error('sendTextInputRequest error:', error);
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+          return { text: null, timedOut: false, cancelled: false, error: errorMessage };
+        }
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        return { text: null, timedOut: false, cancelled: false, error: errorMessage };
       }
     },
   };

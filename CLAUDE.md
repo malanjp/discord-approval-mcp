@@ -28,7 +28,7 @@ src/
 ├── discord-adapter.ts # Discord.js実装
 ├── mcp-server.ts      # MCPサーバー設定
 └── __tests__/
-    └── handlers.test.ts  # ユニットテスト（25件）
+    └── handlers.test.ts  # ユニットテスト（44件）
 ```
 
 ## 環境変数
@@ -149,6 +149,58 @@ mcp__discord-approval__cancel_reminder
 └── reminder_id: string  # キャンセル対象のID（必須）
 ```
 
+### 6. `notify_with_status` - ステータス付き通知
+
+Discord Embed 形式でステータス付き通知を送信する。色分け表示で視認性が高い。
+
+```
+mcp__discord-approval__notify_with_status
+├── message: string  # 通知メッセージ（必須）
+├── status: string   # ステータス（必須）: success/error/warning/info
+└── details: string  # 追加詳細（オプション）
+```
+
+**ステータスと表示:**
+| ステータス | 色 | 絵文字 | 用途 |
+|-----------|-----|-------|------|
+| `success` | 緑 | ✅ | タスク成功、デプロイ完了 |
+| `error` | 赤 | ❌ | エラー発生、失敗 |
+| `warning` | 黄 | ⚠️ | 警告、注意が必要 |
+| `info` | 青 | ℹ️ | 一般的な情報 |
+
+**使用すべき場面:**
+- ビルド・テスト・デプロイの結果報告
+- エラー発生時の通知（詳細をdetailsに含める）
+- 重要な情報の強調表示
+
+### 7. `request_text_input` - テキスト入力リクエスト
+
+Discord Modal ダイアログでユーザーにテキスト入力を要求する。
+
+```
+mcp__discord-approval__request_text_input
+├── title: string       # Modalタイトル（必須、45文字以内）
+├── prompt: string      # 入力を促すメッセージ（必須）
+├── placeholder: string # プレースホルダー（オプション、100文字以内）
+├── multiline: boolean  # 複数行入力（オプション、デフォルトfalse）
+└── timeout: number     # タイムアウト秒数（オプション、デフォルト300、最大900）
+```
+
+**レスポンス:**
+- 入力時: `入力テキスト:\n{入力内容}`
+- キャンセル時: `キャンセル: ユーザーが入力をキャンセルしました`
+- タイムアウト時: `タイムアウト: ユーザーからの応答がありませんでした`
+
+**使用すべき場面:**
+- エラー原因のヒアリング
+- 追加要件の確認
+- コミットメッセージの修正依頼
+- 自由記述のフィードバック収集
+
+**⚠️ 技術的な注意:**
+Discord Modal は Button クリックへの応答としてのみ表示可能。
+そのため、ボタン付きメッセージ → ボタンクリック → Modal表示 の2段階フローで実装されている。
+
 ## ベストプラクティス
 
 ### メッセージの書き方
@@ -188,8 +240,11 @@ mcp__discord-approval__cancel_reminder
 ## discord approval mcp を積極的に使うシーン
 
 - 承認が必要な操作の前（`request_approval`）
-- 長時間タスク完了時（`notify`）
-- **ユーザーへの質問時は下記フローを使用**
+- 長時間タスク完了時（`notify` または `notify_with_status`）
+- ビルド・テスト結果の報告（`notify_with_status` で色分け表示）
+- エラー発生時の詳細報告（`notify_with_status` + details）
+- 自由記述が必要な質問（`request_text_input`）
+- **選択肢付き質問は下記フローを使用**
 
 ## ユーザーへの質問フロー（重要）
 

@@ -1,4 +1,4 @@
-# MCP Discord Approval Server
+# Discord Approval Server MCP
 
 [English](../README.md) | 日本語
 

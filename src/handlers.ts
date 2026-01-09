@@ -3,6 +3,8 @@ import type {
   ApprovalResult,
   NotifyResult,
   QuestionResult,
+  ReminderResult,
+  CancelReminderResult,
   ToolHandlers,
 } from './types.js';
 
@@ -62,6 +64,40 @@ export function createToolHandlers(adapter: DiscordAdapter): ToolHandlers {
       }
 
       return adapter.sendQuestion(question, options, timeout);
+    },
+
+    /**
+     * 指定秒数後にリマインダーを送信するようスケジュールする
+     */
+    async scheduleReminder(
+      message: string,
+      delaySeconds: number
+    ): Promise<ReminderResult> {
+      if (!adapter.isReady()) {
+        return { reminderId: '', success: false, error: 'Discord not connected' };
+      }
+
+      // バリデーション: 1〜3600秒（1時間）
+      if (delaySeconds < 1 || delaySeconds > 3600) {
+        return {
+          reminderId: '',
+          success: false,
+          error: '遅延秒数は1〜3600の範囲で指定してください',
+        };
+      }
+
+      return adapter.scheduleReminder(message, delaySeconds);
+    },
+
+    /**
+     * スケジュール済みのリマインダーをキャンセルする
+     */
+    async cancelReminder(reminderId: string): Promise<CancelReminderResult> {
+      if (!adapter.isReady()) {
+        return { success: false, error: 'Discord not connected' };
+      }
+
+      return adapter.cancelReminder(reminderId);
     },
   };
 }

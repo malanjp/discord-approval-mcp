@@ -81,6 +81,27 @@ Sends a question with multiple choices and waits for the user's selection.
 
 **Returns**: The selected option / `Timeout`
 
+### `schedule_reminder`
+
+Schedules a reminder to be sent to Discord after a specified delay. Use with AskUserQuestion to notify via Discord when the user doesn't respond in time.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| message | string | ✅ | The reminder message |
+| delay_seconds | number | ✅ | Delay in seconds (1-3600) |
+
+**Returns**: `{ reminder_id: string }` for cancellation
+
+### `cancel_reminder`
+
+Cancels a scheduled reminder.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| reminder_id | string | ✅ | The reminder ID from schedule_reminder |
+
+**Returns**: Success / Error message
+
 ## Usage Example
 
 In Claude Code:

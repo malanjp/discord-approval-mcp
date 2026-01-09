@@ -28,7 +28,7 @@ src/
 ├── discord-adapter.ts # Discord.js実装
 ├── mcp-server.ts      # MCPサーバー設定
 └── __tests__/
-    └── handlers.test.ts  # ユニットテスト（16件）
+    └── handlers.test.ts  # ユニットテスト（25件）
 ```
 
 ## 環境変数
@@ -117,6 +117,33 @@ mcp__discord-approval__ask_question
 - 設定値の選択
 - 曖昧な指示の明確化
 
+### 4. `schedule_reminder` - リマインダースケジュール
+
+指定秒数後にDiscordへリマインダーを送信する。AskUserQuestionと併用し、ユーザーが一定時間応答しない場合にDiscordへ通知するために使用。
+
+```
+mcp__discord-approval__schedule_reminder
+├── message: string       # リマインダーメッセージ（必須）
+└── delay_seconds: number # 遅延秒数（1〜3600秒、必須）
+```
+
+**戻り値:** `reminder_id` （キャンセル用）
+
+**使い方の例:**
+1. `schedule_reminder` で60秒後のリマインダーを予約
+2. Claude Code の `AskUserQuestion` でユーザーに質問
+3. ユーザーが応答したら → `cancel_reminder` でキャンセル
+4. 応答がなければ → 60秒後にDiscordへリマインダーが届く
+
+### 5. `cancel_reminder` - リマインダーキャンセル
+
+スケジュール済みのリマインダーをキャンセルする。
+
+```
+mcp__discord-approval__cancel_reminder
+└── reminder_id: string  # キャンセル対象のID（必須）
+```
+
 ## ベストプラクティス
 
 ### メッセージの書き方
@@ -153,28 +180,9 @@ mcp__discord-approval__ask_question
 3. エラー → notify でエラー内容を報告
 ```
 
-## 使用例
+## discord approval mcp を積極的に使うシーン
 
-### デプロイ前の承認フロー
+- ユーザに確認を促すとき
+- ユーザに質問をするとき
+- タスク完了時
 
-```
-1. request_approval: 「本番環境にデプロイします。変更内容: ログイン機能の修正」
-2. 承認された場合 → デプロイ実行
-3. notify: 「デプロイ完了しました。URL: https://...」
-```
-
-### 実装方針の確認
-
-```
-1. ask_question: 「認証方式をどちらにしますか？」
-   options: ["JWT（推奨）", "セッションベース", "OAuth2.0"]
-2. 選択結果に基づいて実装
-```
-
-### 長時間タスクの完了通知
-
-```
-1. テスト実行開始
-2. （テスト完了後）
-3. notify: 「テスト完了: 156件中156件成功 ✅」
-```

@@ -17,6 +17,10 @@ function createMockAdapter(
     sendQuestion: vi
       .fn()
       .mockResolvedValue({ selected: 'option1', timedOut: false }),
+    scheduleReminder: vi
+      .fn()
+      .mockResolvedValue({ reminderId: 'test-id-123', success: true }),
+    cancelReminder: vi.fn().mockResolvedValue({ success: true }),
     connect: vi.fn().mockResolvedValue(undefined),
     disconnect: vi.fn().mockResolvedValue(undefined),
     ...overrides,
@@ -237,6 +241,128 @@ describe('createToolHandlers', () => {
       await handlers.askQuestion('質問?', ['A', 'B'], 120);
 
       expect(adapter.sendQuestion).toHaveBeenCalledWith('質問?', ['A', 'B'], 120);
+    });
+  });
+
+  describe('scheduleReminder', () => {
+    it('Discord 未接続時はエラーを返す', async () => {
+      const adapter = createMockAdapter({ isReady: () => false });
+      const handlers = createToolHandlers(adapter);
+
+      const result = await handlers.scheduleReminder('リマインダー', 60);
+
+      expect(result).toEqual({
+        reminderId: '',
+        success: false,
+        error: 'Discord not connected',
+      });
+      expect(adapter.scheduleReminder).not.toHaveBeenCalled();
+    });
+
+    it('遅延秒数が 1 未満の場合はエラーを返す', async () => {
+      const adapter = createMockAdapter();
+      const handlers = createToolHandlers(adapter);
+
+      const result = await handlers.scheduleReminder('リマインダー', 0);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('遅延秒数は1〜3600の範囲で指定してください');
+      expect(adapter.scheduleReminder).not.toHaveBeenCalled();
+    });
+
+    it('遅延秒数が負の場合はエラーを返す', async () => {
+      const adapter = createMockAdapter();
+      const handlers = createToolHandlers(adapter);
+
+      const result = await handlers.scheduleReminder('リマインダー', -10);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('遅延秒数は1〜3600の範囲で指定してください');
+    });
+
+    it('遅延秒数が 3600 を超える場合はエラーを返す', async () => {
+      const adapter = createMockAdapter();
+      const handlers = createToolHandlers(adapter);
+
+      const result = await handlers.scheduleReminder('リマインダー', 3601);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('遅延秒数は1〜3600の範囲で指定してください');
+      expect(adapter.scheduleReminder).not.toHaveBeenCalled();
+    });
+
+    it('遅延秒数が 3600 ちょうどの場合は正常に動作する', async () => {
+      const adapter = createMockAdapter({
+        scheduleReminder: vi
+          .fn()
+          .mockResolvedValue({ reminderId: 'max-delay-id', success: true }),
+      });
+      const handlers = createToolHandlers(adapter);
+
+      const result = await handlers.scheduleReminder('リマインダー', 3600);
+
+      expect(result.success).toBe(true);
+      expect(result.reminderId).toBe('max-delay-id');
+      expect(adapter.scheduleReminder).toHaveBeenCalledWith('リマインダー', 3600);
+    });
+
+    it('正常にスケジュールされた場合は reminderId を返す', async () => {
+      const adapter = createMockAdapter({
+        scheduleReminder: vi
+          .fn()
+          .mockResolvedValue({ reminderId: 'uuid-1234', success: true }),
+      });
+      const handlers = createToolHandlers(adapter);
+
+      const result = await handlers.scheduleReminder('テストリマインダー', 60);
+
+      expect(result.success).toBe(true);
+      expect(result.reminderId).toBe('uuid-1234');
+      expect(adapter.scheduleReminder).toHaveBeenCalledWith(
+        'テストリマインダー',
+        60
+      );
+    });
+  });
+
+  describe('cancelReminder', () => {
+    it('Discord 未接続時はエラーを返す', async () => {
+      const adapter = createMockAdapter({ isReady: () => false });
+      const handlers = createToolHandlers(adapter);
+
+      const result = await handlers.cancelReminder('test-id');
+
+      expect(result).toEqual({
+        success: false,
+        error: 'Discord not connected',
+      });
+      expect(adapter.cancelReminder).not.toHaveBeenCalled();
+    });
+
+    it('存在しないリマインダーIDの場合はエラーを返す', async () => {
+      const adapter = createMockAdapter({
+        cancelReminder: vi
+          .fn()
+          .mockResolvedValue({ success: false, error: 'リマインダーが見つかりません' }),
+      });
+      const handlers = createToolHandlers(adapter);
+
+      const result = await handlers.cancelReminder('non-existent-id');
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('リマインダーが見つかりません');
+    });
+
+    it('正常にキャンセルされた場合は success: true を返す', async () => {
+      const adapter = createMockAdapter({
+        cancelReminder: vi.fn().mockResolvedValue({ success: true }),
+      });
+      const handlers = createToolHandlers(adapter);
+
+      const result = await handlers.cancelReminder('valid-id');
+
+      expect(result.success).toBe(true);
+      expect(adapter.cancelReminder).toHaveBeenCalledWith('valid-id');
     });
   });
 });

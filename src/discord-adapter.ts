@@ -10,11 +10,14 @@ import {
   StringSelectMenuBuilder,
   StringSelectMenuOptionBuilder,
 } from 'discord.js';
+import { randomUUID } from 'crypto';
 import type {
   DiscordAdapter,
   ApprovalResult,
   NotifyResult,
   QuestionResult,
+  ReminderResult,
+  CancelReminderResult,
 } from './types.js';
 
 export type DiscordAdapterConfig = {
@@ -35,6 +38,9 @@ export function createDiscordAdapter(config: DiscordAdapterConfig): DiscordAdapt
   let ready = false;
 
   const connectionTimeout = config.connectionTimeout ?? 30000;
+
+  // リマインダータイマー管理用
+  const reminderTimers = new Map<string, NodeJS.Timeout>();
 
   return {
     isReady: () => ready,
@@ -79,6 +85,12 @@ export function createDiscordAdapter(config: DiscordAdapterConfig): DiscordAdapt
     },
 
     async disconnect(): Promise<void> {
+      // すべてのリマインダータイマーをクリア
+      for (const [id, timer] of reminderTimers) {
+        clearTimeout(timer);
+        reminderTimers.delete(id);
+      }
+
       if (client) {
         try {
           client.destroy();
@@ -258,6 +270,52 @@ export function createDiscordAdapter(config: DiscordAdapterConfig): DiscordAdapt
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         return { selected: null, timedOut: false, error: errorMessage };
+      }
+    },
+
+    async scheduleReminder(
+      message: string,
+      delaySeconds: number
+    ): Promise<ReminderResult> {
+      if (!ready || !channel) {
+        return { reminderId: '', success: false, error: 'Discord not connected' };
+      }
+
+      const reminderId = randomUUID();
+      const channelRef = channel;
+
+      try {
+        const timeoutId = setTimeout(async () => {
+          try {
+            await channelRef.send(`🔔 **リマインダー**\n\n${message}`);
+          } catch (error) {
+            console.error('Failed to send reminder:', error);
+          } finally {
+            reminderTimers.delete(reminderId);
+          }
+        }, delaySeconds * 1000);
+
+        reminderTimers.set(reminderId, timeoutId);
+        return { reminderId, success: true };
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        return { reminderId: '', success: false, error: errorMessage };
+      }
+    },
+
+    async cancelReminder(reminderId: string): Promise<CancelReminderResult> {
+      const timeoutId = reminderTimers.get(reminderId);
+      if (!timeoutId) {
+        return { success: false, error: 'リマインダーが見つかりません' };
+      }
+
+      try {
+        clearTimeout(timeoutId);
+        reminderTimers.delete(reminderId);
+        return { success: true };
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        return { success: false, error: errorMessage };
       }
     },
   };

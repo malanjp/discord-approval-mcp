@@ -25,6 +25,23 @@ export type QuestionResult = {
 };
 
 /**
+ * リマインダースケジュールの結果
+ */
+export type ReminderResult = {
+  reminderId: string;
+  success: boolean;
+  error?: string;
+};
+
+/**
+ * リマインダーキャンセルの結果
+ */
+export type CancelReminderResult = {
+  success: boolean;
+  error?: string;
+};
+
+/**
  * Discord 操作を抽象化するアダプター
  *
  * テスト時にはモック実装を注入することで、
@@ -50,6 +67,15 @@ export type DiscordAdapter = {
     timeoutSec: number
   ) => Promise<QuestionResult>;
 
+  /** リマインダーをスケジュールする */
+  scheduleReminder: (
+    message: string,
+    delaySeconds: number
+  ) => Promise<ReminderResult>;
+
+  /** スケジュール済みリマインダーをキャンセルする */
+  cancelReminder: (reminderId: string) => Promise<CancelReminderResult>;
+
   /** Discord に接続する */
   connect: () => Promise<void>;
 
@@ -71,4 +97,9 @@ export type ToolHandlers = {
     options: string[],
     timeout?: number
   ) => Promise<QuestionResult>;
+  scheduleReminder: (
+    message: string,
+    delaySeconds: number
+  ) => Promise<ReminderResult>;
+  cancelReminder: (reminderId: string) => Promise<CancelReminderResult>;
 };

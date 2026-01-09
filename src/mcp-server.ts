@@ -76,6 +76,40 @@ export function createMcpServer(handlers: ToolHandlers): Server {
           required: ['question', 'options'],
         },
       },
+      {
+        name: 'schedule_reminder',
+        description:
+          '指定秒数後にDiscordへリマインダーを送信する。AskUserQuestionと併用し、一定時間応答がない場合にDiscordへ通知するために使用する。',
+        inputSchema: {
+          type: 'object' as const,
+          properties: {
+            message: {
+              type: 'string',
+              description: 'リマインダーメッセージ',
+            },
+            delay_seconds: {
+              type: 'number',
+              description: '遅延秒数（1〜3600秒＝1時間）',
+            },
+          },
+          required: ['message', 'delay_seconds'],
+        },
+      },
+      {
+        name: 'cancel_reminder',
+        description:
+          'スケジュール済みのリマインダーをキャンセルする。ユーザーが応答した場合にリマインダーを取り消すために使用する。',
+        inputSchema: {
+          type: 'object' as const,
+          properties: {
+            reminder_id: {
+              type: 'string',
+              description: 'キャンセルするリマインダーのID（schedule_reminderで取得）',
+            },
+          },
+          required: ['reminder_id'],
+        },
+      },
     ],
   }));
 
@@ -138,6 +172,45 @@ export function createMcpServer(handlers: ToolHandlers): Server {
 
       return {
         content: [{ type: 'text', text: responseText }],
+      };
+    }
+
+    if (name === 'schedule_reminder') {
+      const { message, delay_seconds } = args as {
+        message: string;
+        delay_seconds: number;
+      };
+      const result = await handlers.scheduleReminder(message, delay_seconds);
+
+      if (result.error) {
+        return {
+          content: [{ type: 'text', text: `エラー: ${result.error}` }],
+        };
+      }
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `リマインダーをスケジュールしました（${delay_seconds}秒後）\nreminder_id: ${result.reminderId}`,
+          },
+        ],
+      };
+    }
+
+    if (name === 'cancel_reminder') {
+      const { reminder_id } = args as { reminder_id: string };
+      const result = await handlers.cancelReminder(reminder_id);
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: result.success
+              ? 'リマインダーをキャンセルしました'
+              : `キャンセルに失敗: ${result.error}`,
+          },
+        ],
       };
     }
 

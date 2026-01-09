@@ -110,6 +110,12 @@ Use `mcp__discord-approval__ask_question` when you need the user to choose from 
 - Choosing configuration values
 
 Use `mcp__discord-approval__notify` when long-running tasks (builds, tests, etc.) complete.
+
+## When to actively use discord approval mcp
+
+- When prompting the user for confirmation
+- When asking questions to the user
+- When a task is completed
 ```
 
 ## License

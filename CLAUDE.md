@@ -117,6 +117,11 @@ mcp__discord-approval__ask_question
 - 設定値の選択
 - 曖昧な指示の明確化
 
+**⚠️ 注意:**
+通常のユーザー質問には `ask_question` を直接使用しないこと。
+代わりに `schedule_reminder` + `AskUserQuestion` + `cancel_reminder` のフローを使用する。
+`ask_question` の直接使用は、CLI が使えない状況や、明示的に Discord 経由での回答が必要な場合に限る。
+
 ### 4. `schedule_reminder` - リマインダースケジュール
 
 指定秒数後にDiscordへリマインダーを送信する。AskUserQuestionと併用し、ユーザーが一定時間応答しない場合にDiscordへ通知するために使用。
@@ -182,7 +187,32 @@ mcp__discord-approval__cancel_reminder
 
 ## discord approval mcp を積極的に使うシーン
 
-- ユーザに確認を促すとき
-- ユーザに質問をするとき
-- タスク完了時
+- 承認が必要な操作の前（`request_approval`）
+- 長時間タスク完了時（`notify`）
+- **ユーザーへの質問時は下記フローを使用**
+
+## ユーザーへの質問フロー（重要）
+
+ユーザーに質問する際は、以下のフローを **必ず** 使用すること：
+
+1. `schedule_reminder` で60秒後のリマインダーを予約
+2. Claude Code の `AskUserQuestion` でユーザーに質問
+3. ユーザーが応答したら → `cancel_reminder` でキャンセル
+4. 応答がなければ → 60秒後にDiscordへリマインダーが届く
+
+**禁止事項:**
+- `ask_question` を直接使用してユーザーに質問しない
+- `ask_question` は `AskUserQuestion` のタイムアウト後のフォローアップとしてのみ使用可
+
+**コード例:**
+```
+// Step 1: リマインダー予約
+reminder = schedule_reminder("質問への回答をお待ちしています", 60)
+
+// Step 2: CLI で質問
+answer = AskUserQuestion("どの方法で実装しますか？", options)
+
+// Step 3: 応答があればキャンセル
+cancel_reminder(reminder.reminder_id)
+```
 

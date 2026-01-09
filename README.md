@@ -1,35 +1,37 @@
 # MCP Discord Approval Server
 
-Claude CodeからDiscord経由で承認リクエスト・通知を送信するMCPサーバー。
+English | [日本語](docs/README.ja.md)
 
-## セットアップ
+An MCP server that sends approval requests and notifications via Discord from Claude Code.
 
-### 1. Discord Bot 作成
+## Setup
 
-1. [Discord Developer Portal](https://discord.com/developers/applications) にアクセス
-2. **New Application** → アプリ名を入力
-3. **Bot** タブ → **Reset Token** → トークンをコピー
-4. **Bot** タブ → **MESSAGE CONTENT INTENT** を有効化（任意）
-5. **OAuth2** → **URL Generator**:
+### 1. Create a Discord Bot
+
+1. Go to the [Discord Developer Portal](https://discord.com/developers/applications)
+2. Click **New Application** → Enter an application name
+3. Navigate to the **Bot** tab → Click **Reset Token** → Copy the token
+4. In the **Bot** tab → Enable **MESSAGE CONTENT INTENT** (optional)
+5. Go to **OAuth2** → **URL Generator**:
    - Scopes: `bot`
    - Bot Permissions: `Send Messages`, `Read Message History`
-6. 生成されたURLでBotをサーバーに招待
+6. Use the generated URL to invite the bot to your server
 
-### 2. チャンネルID取得
+### 2. Get the Channel ID
 
-1. Discord設定 → 詳細設定 → **開発者モード** を有効化
-2. 通知を受け取りたいチャンネルを右クリック → **IDをコピー**
+1. Open Discord Settings → Advanced → Enable **Developer Mode**
+2. Right-click the channel where you want to receive notifications → **Copy ID**
 
-### 3. ビルド
+### 3. Build
 
 ```bash
 npm install
 npm run build
 ```
 
-### 4. Claude Code設定
+### 4. Configure Claude Code
 
-`~/.claude.json` に追加:
+Add to `~/.claude.json`:
 
 ```json
 {
@@ -46,37 +48,37 @@ npm run build
 }
 ```
 
-## 使用可能なツール
+## Available Tools
 
 ### `request_approval`
 
-承認リクエストを送信し、ユーザーの応答を待つ。
+Sends an approval request and waits for the user's response.
 
-| パラメータ | 型 | 必須 | 説明 |
-|-----------|------|------|------|
-| message | string | ✅ | 確認したい内容 |
-| timeout | number | - | タイムアウト秒数（デフォルト: 300） |
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| message | string | ✅ | The content to be approved |
+| timeout | number | - | Timeout in seconds (default: 300) |
 
-**戻り値**: `承認されました` / `否認されました` / `タイムアウト`
+**Returns**: `Approved` / `Denied` / `Timeout`
 
 ### `notify`
 
-通知を送信する（応答不要）。
+Sends a notification (no response required).
 
-| パラメータ | 型 | 必須 | 説明 |
-|-----------|------|------|------|
-| message | string | ✅ | 通知メッセージ |
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| message | string | ✅ | The notification message |
 
-## 使用例
+## Usage Example
 
-Claude Codeで:
+In Claude Code:
 
 ```
-本番環境にデプロイする前にユーザーの承認を取得してください
+Get user approval before deploying to production
 ```
 
-→ Discordにボタン付きメッセージが送信され、承認/否認を待機
+→ A message with buttons will be sent to Discord, waiting for approval/denial
 
-## ライセンス
+## License
 
 MIT

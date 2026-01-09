@@ -38,7 +38,7 @@ npm run build
   "mcpServers": {
     "discord-approval": {
       "command": "node",
-      "args": ["/path/to/mcp-discord-approval/dist/index.js"],
+      "args": ["/path/to/discord-approval-mcp/dist/index.js"],
       "env": {
         "DISCORD_BOT_TOKEN": "your_bot_token",
         "DISCORD_CHANNEL_ID": "your_channel_id"

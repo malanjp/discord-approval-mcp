@@ -69,6 +69,18 @@ Sends a notification (no response required).
 |-----------|------|----------|-------------|
 | message | string | ✅ | The notification message |
 
+### `ask_question`
+
+Sends a question with multiple choices and waits for the user's selection.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| question | string | ✅ | The question to ask |
+| options | string[] | ✅ | Array of choices (2-25 items) |
+| timeout | number | - | Timeout in seconds (default: 300) |
+
+**Returns**: The selected option / `Timeout`
+
 ## Usage Example
 
 In Claude Code:
@@ -91,7 +103,11 @@ Use `mcp__discord-approval__request_approval` for approval in these situations:
 - Before running database migrations
 - Before bulk file deletions
 - Before other irreversible operations
-- When asking the user a question
+
+Use `mcp__discord-approval__ask_question` when you need the user to choose from multiple options:
+- Selecting implementation approach
+- Clarifying ambiguous instructions
+- Choosing configuration values
 
 Use `mcp__discord-approval__notify` when long-running tasks (builds, tests, etc.) complete.
 ```

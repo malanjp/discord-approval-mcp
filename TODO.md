@@ -28,12 +28,12 @@
 
 ### 低優先度
 
-- [ ] **`request_approval_with_reason`** - 理由付き承認
+- [x] **`request_approval_with_reason`** - 理由付き承認 ✅
   - Button + Modal の組み合わせ
   - 戻り値: `{ approved, reason?, timedOut }`
   - 用途: 否認時の理由取得
 
-- [ ] **`create_thread`** - スレッド作成
+- [x] **`create_thread`** - スレッド作成 ✅
   - channel.threads.create()
   - 戻り値: `{ thread_id }`
   - 用途: 長い作業の進捗をスレッドにまとめる

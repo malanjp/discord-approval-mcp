@@ -31,6 +31,12 @@ function createMockAdapter(
     sendPoll: vi
       .fn()
       .mockResolvedValue({ selected: ['option1'], timedOut: false }),
+    sendApprovalWithReasonRequest: vi
+      .fn()
+      .mockResolvedValue({ approved: true, reason: null, timedOut: false }),
+    createThread: vi
+      .fn()
+      .mockResolvedValue({ threadId: 'thread-123', success: true }),
     connect: vi.fn().mockResolvedValue(undefined),
     disconnect: vi.fn().mockResolvedValue(undefined),
     ...overrides,
@@ -966,6 +972,259 @@ describe('createToolHandlers', () => {
         2,
         120
       );
+    });
+
+    it('timeout が範囲外（0以下）の場合はエラーを返す', async () => {
+      const adapter = createMockAdapter();
+      const handlers = createToolHandlers(adapter);
+
+      const result = await handlers.poll('質問?', ['A', 'B'], 0, 2, 0);
+
+      expect(result.error).toBe('タイムアウトは1〜900秒の範囲で指定してください');
+      expect(adapter.sendPoll).not.toHaveBeenCalled();
+    });
+
+    it('timeout が範囲外（901以上）の場合はエラーを返す', async () => {
+      const adapter = createMockAdapter();
+      const handlers = createToolHandlers(adapter);
+
+      const result = await handlers.poll('質問?', ['A', 'B'], 0, 2, 901);
+
+      expect(result.error).toBe('タイムアウトは1〜900秒の範囲で指定してください');
+      expect(adapter.sendPoll).not.toHaveBeenCalled();
+    });
+
+    it('timeout が境界値（1秒）の場合は正常に動作する', async () => {
+      const adapter = createMockAdapter({
+        sendPoll: vi.fn().mockResolvedValue({ selected: ['A'], timedOut: false }),
+      });
+      const handlers = createToolHandlers(adapter);
+
+      const result = await handlers.poll('質問?', ['A', 'B'], 0, 2, 1);
+
+      expect(result.selected).toEqual(['A']);
+      expect(adapter.sendPoll).toHaveBeenCalled();
+    });
+
+    it('timeout が境界値（900秒）の場合は正常に動作する', async () => {
+      const adapter = createMockAdapter({
+        sendPoll: vi.fn().mockResolvedValue({ selected: ['A'], timedOut: false }),
+      });
+      const handlers = createToolHandlers(adapter);
+
+      const result = await handlers.poll('質問?', ['A', 'B'], 0, 2, 900);
+
+      expect(result.selected).toEqual(['A']);
+      expect(adapter.sendPoll).toHaveBeenCalled();
+    });
+  });
+
+  describe('requestApprovalWithReason', () => {
+    it('Discord 未接続時はエラーを返す', async () => {
+      const adapter = createMockAdapter({ isReady: () => false });
+      const handlers = createToolHandlers(adapter);
+
+      const result = await handlers.requestApprovalWithReason('承認依頼');
+
+      expect(result).toEqual({
+        approved: false,
+        reason: null,
+        timedOut: false,
+        error: 'Discord not connected',
+      });
+      expect(adapter.sendApprovalWithReasonRequest).not.toHaveBeenCalled();
+    });
+
+    it('承認された場合は approved: true を返す', async () => {
+      const adapter = createMockAdapter({
+        sendApprovalWithReasonRequest: vi
+          .fn()
+          .mockResolvedValue({ approved: true, reason: null, timedOut: false }),
+      });
+      const handlers = createToolHandlers(adapter);
+
+      const result = await handlers.requestApprovalWithReason('承認依頼', 60);
+
+      expect(result.approved).toBe(true);
+      expect(result.reason).toBeNull();
+      expect(adapter.sendApprovalWithReasonRequest).toHaveBeenCalledWith('承認依頼', 60);
+    });
+
+    it('否認された場合は approved: false と reason を返す', async () => {
+      const adapter = createMockAdapter({
+        sendApprovalWithReasonRequest: vi
+          .fn()
+          .mockResolvedValue({ approved: false, reason: '仕様変更のため', timedOut: false }),
+      });
+      const handlers = createToolHandlers(adapter);
+
+      const result = await handlers.requestApprovalWithReason('承認依頼');
+
+      expect(result.approved).toBe(false);
+      expect(result.reason).toBe('仕様変更のため');
+    });
+
+    it('タイムアウト時は timedOut: true を返す', async () => {
+      const adapter = createMockAdapter({
+        sendApprovalWithReasonRequest: vi
+          .fn()
+          .mockResolvedValue({ approved: false, reason: null, timedOut: true }),
+      });
+      const handlers = createToolHandlers(adapter);
+
+      const result = await handlers.requestApprovalWithReason('承認依頼');
+
+      expect(result.timedOut).toBe(true);
+    });
+
+    it('デフォルト値が正しく使用される', async () => {
+      const adapter = createMockAdapter();
+      const handlers = createToolHandlers(adapter);
+
+      await handlers.requestApprovalWithReason('承認依頼');
+
+      expect(adapter.sendApprovalWithReasonRequest).toHaveBeenCalledWith('承認依頼', 300);
+    });
+
+    it('メッセージが空の場合はエラーを返す', async () => {
+      const adapter = createMockAdapter();
+      const handlers = createToolHandlers(adapter);
+
+      const result = await handlers.requestApprovalWithReason('');
+
+      expect(result.error).toBe('メッセージは必須です');
+      expect(adapter.sendApprovalWithReasonRequest).not.toHaveBeenCalled();
+    });
+
+    it('メッセージが空白のみの場合はエラーを返す', async () => {
+      const adapter = createMockAdapter();
+      const handlers = createToolHandlers(adapter);
+
+      const result = await handlers.requestApprovalWithReason('   ');
+
+      expect(result.error).toBe('メッセージは必須です');
+      expect(adapter.sendApprovalWithReasonRequest).not.toHaveBeenCalled();
+    });
+
+    it('timeout が範囲外（0以下）の場合はエラーを返す', async () => {
+      const adapter = createMockAdapter();
+      const handlers = createToolHandlers(adapter);
+
+      const result = await handlers.requestApprovalWithReason('承認依頼', 0);
+
+      expect(result.error).toBe('タイムアウトは1〜900秒の範囲で指定してください');
+      expect(adapter.sendApprovalWithReasonRequest).not.toHaveBeenCalled();
+    });
+
+    it('timeout が範囲外（901以上）の場合はエラーを返す', async () => {
+      const adapter = createMockAdapter();
+      const handlers = createToolHandlers(adapter);
+
+      const result = await handlers.requestApprovalWithReason('承認依頼', 901);
+
+      expect(result.error).toBe('タイムアウトは1〜900秒の範囲で指定してください');
+      expect(adapter.sendApprovalWithReasonRequest).not.toHaveBeenCalled();
+    });
+
+    it('timeout が境界値（1秒）の場合は正常に動作する', async () => {
+      const adapter = createMockAdapter({
+        sendApprovalWithReasonRequest: vi
+          .fn()
+          .mockResolvedValue({ approved: true, reason: null, timedOut: false }),
+      });
+      const handlers = createToolHandlers(adapter);
+
+      const result = await handlers.requestApprovalWithReason('承認依頼', 1);
+
+      expect(result.approved).toBe(true);
+      expect(adapter.sendApprovalWithReasonRequest).toHaveBeenCalledWith('承認依頼', 1);
+    });
+
+    it('timeout が境界値（900秒）の場合は正常に動作する', async () => {
+      const adapter = createMockAdapter({
+        sendApprovalWithReasonRequest: vi
+          .fn()
+          .mockResolvedValue({ approved: true, reason: null, timedOut: false }),
+      });
+      const handlers = createToolHandlers(adapter);
+
+      const result = await handlers.requestApprovalWithReason('承認依頼', 900);
+
+      expect(result.approved).toBe(true);
+      expect(adapter.sendApprovalWithReasonRequest).toHaveBeenCalledWith('承認依頼', 900);
+    });
+  });
+
+  describe('createThread', () => {
+    it('Discord 未接続時はエラーを返す', async () => {
+      const adapter = createMockAdapter({ isReady: () => false });
+      const handlers = createToolHandlers(adapter);
+
+      const result = await handlers.createThread('スレッド名');
+
+      expect(result).toEqual({
+        threadId: null,
+        success: false,
+        error: 'Discord not connected',
+      });
+      expect(adapter.createThread).not.toHaveBeenCalled();
+    });
+
+    it('スレッド名が空の場合はエラーを返す', async () => {
+      const adapter = createMockAdapter();
+      const handlers = createToolHandlers(adapter);
+
+      const result = await handlers.createThread('');
+
+      expect(result.error).toBe('スレッド名は必須です');
+      expect(adapter.createThread).not.toHaveBeenCalled();
+    });
+
+    it('スレッド名が100文字を超える場合はエラーを返す', async () => {
+      const adapter = createMockAdapter();
+      const handlers = createToolHandlers(adapter);
+      const longName = 'a'.repeat(101);
+
+      const result = await handlers.createThread(longName);
+
+      expect(result.error).toBe('スレッド名は100文字以内にしてください');
+      expect(adapter.createThread).not.toHaveBeenCalled();
+    });
+
+    it('正常にスレッドが作成された場合は threadId を返す', async () => {
+      const adapter = createMockAdapter({
+        createThread: vi.fn().mockResolvedValue({ threadId: 'thread-abc', success: true }),
+      });
+      const handlers = createToolHandlers(adapter);
+
+      const result = await handlers.createThread('作業スレッド', '初期メッセージ');
+
+      expect(result.success).toBe(true);
+      expect(result.threadId).toBe('thread-abc');
+      expect(adapter.createThread).toHaveBeenCalledWith('作業スレッド', '初期メッセージ');
+    });
+
+    it('メッセージなしでスレッドを作成できる', async () => {
+      const adapter = createMockAdapter();
+      const handlers = createToolHandlers(adapter);
+
+      await handlers.createThread('スレッド名');
+
+      expect(adapter.createThread).toHaveBeenCalledWith('スレッド名', undefined);
+    });
+
+    it('作成失敗時はエラーを返す', async () => {
+      const adapter = createMockAdapter({
+        createThread: vi
+          .fn()
+          .mockResolvedValue({ threadId: null, success: false, error: '権限がありません' }),
+      });
+      const handlers = createToolHandlers(adapter);
+
+      const result = await handlers.createThread('スレッド名');
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('権限がありません');
     });
   });
 });

@@ -224,6 +224,44 @@ export function createMcpServer(handlers: ToolHandlers): Server {
           required: ['question', 'options'],
         },
       },
+      {
+        name: 'request_approval_with_reason',
+        description:
+          'Discordに承認リクエストを送信し、否認時に理由を取得する。ユーザーが否認した場合、Modalで理由を入力してもらう。',
+        inputSchema: {
+          type: 'object' as const,
+          properties: {
+            message: {
+              type: 'string',
+              description: '確認したい内容（何を承認するのかを明確に記述）',
+            },
+            timeout: {
+              type: 'number',
+              description: 'タイムアウト秒数（デフォルト300秒＝5分）',
+            },
+          },
+          required: ['message'],
+        },
+      },
+      {
+        name: 'create_thread',
+        description:
+          'Discordにスレッドを作成する。長い作業の進捗をスレッドにまとめる場合に使用する。',
+        inputSchema: {
+          type: 'object' as const,
+          properties: {
+            name: {
+              type: 'string',
+              description: 'スレッド名（100文字以内）',
+            },
+            message: {
+              type: 'string',
+              description: 'スレッドの最初のメッセージ（省略可）',
+            },
+          },
+          required: ['name'],
+        },
+      },
     ],
   }));
 
@@ -428,6 +466,50 @@ export function createMcpServer(handlers: ToolHandlers): Server {
         responseText = 'ユーザーは何も選択しませんでした';
       } else {
         responseText = `ユーザーの選択 (${result.selected.length}件):\n${result.selected.map((s) => `- ${s}`).join('\n')}`;
+      }
+
+      return {
+        content: [{ type: 'text', text: responseText }],
+      };
+    }
+
+    if (name === 'request_approval_with_reason') {
+      const { message, timeout = 300 } = args as {
+        message: string;
+        timeout?: number;
+      };
+      const result = await handlers.requestApprovalWithReason(message, timeout);
+
+      let responseText: string;
+      if (result.error) {
+        responseText = `エラー: ${result.error}`;
+      } else if (result.timedOut) {
+        responseText = 'タイムアウト: ユーザーからの応答がありませんでした';
+      } else if (result.approved) {
+        responseText = '承認されました';
+      } else {
+        responseText = result.reason
+          ? `否認されました\n理由: ${result.reason}`
+          : '否認されました（理由なし）';
+      }
+
+      return {
+        content: [{ type: 'text', text: responseText }],
+      };
+    }
+
+    if (name === 'create_thread') {
+      const { name: threadName, message } = args as {
+        name: string;
+        message?: string;
+      };
+      const result = await handlers.createThread(threadName, message);
+
+      let responseText: string;
+      if (result.error) {
+        responseText = `エラー: ${result.error}`;
+      } else {
+        responseText = `スレッドを作成しました\nthread_id: ${result.threadId}`;
       }
 
       return {

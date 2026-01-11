@@ -13,6 +13,7 @@ import {
   ModalBuilder,
   TextInputBuilder,
   TextInputStyle,
+  ChannelType,
 } from 'discord.js';
 import { randomUUID } from 'crypto';
 import type {
@@ -26,6 +27,8 @@ import type {
   TextInputResult,
   DiffConfirmResult,
   PollResult,
+  ApprovalWithReasonResult,
+  ThreadResult,
 } from './types.js';
 
 /**
@@ -581,10 +584,14 @@ export function createDiscordAdapter(config: DiscordAdapterConfig): DiscordAdapt
               .setColor(0x99aab5) // Gray
               .setTitle('⏰ タイムアウト');
 
-            await sent.edit({
-              embeds: [timeoutEmbed],
-              components: [],
-            });
+            try {
+              await sent.edit({
+                embeds: [timeoutEmbed],
+                components: [],
+              });
+            } catch {
+              // メッセージが削除されていた場合など、edit失敗は無視
+            }
             return { approved: false, timedOut: true };
           }
 
@@ -676,6 +683,158 @@ export function createDiscordAdapter(config: DiscordAdapterConfig): DiscordAdapt
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         return { selected: [], timedOut: false, error: errorMessage };
+      }
+    },
+
+    async sendApprovalWithReasonRequest(
+      message: string,
+      timeoutSec: number
+    ): Promise<ApprovalWithReasonResult> {
+      if (!ready || !channel) {
+        return { approved: false, reason: null, timedOut: false, error: 'Discord not connected' };
+      }
+
+      const interactionId = randomUUID();
+
+      try {
+        const approveBtn = new ButtonBuilder()
+          .setCustomId(`approve_with_reason_${interactionId}`)
+          .setLabel('✅ 承認')
+          .setStyle(ButtonStyle.Success);
+
+        const denyBtn = new ButtonBuilder()
+          .setCustomId(`deny_with_reason_${interactionId}`)
+          .setLabel('❌ 否認（理由入力）')
+          .setStyle(ButtonStyle.Danger);
+
+        const row = new ActionRowBuilder<ButtonBuilder>().addComponents(approveBtn, denyBtn);
+
+        const sent = await channel.send({
+          content: `🔔 **承認リクエスト**\n\n${message}`,
+          components: [row],
+        });
+
+        try {
+          const buttonInteraction = await sent.awaitMessageComponent({
+            componentType: ComponentType.Button,
+            time: timeoutSec * 1000,
+            filter: (i) =>
+              i.customId === `approve_with_reason_${interactionId}` ||
+              i.customId === `deny_with_reason_${interactionId}`,
+          });
+
+          // 承認された場合
+          if (buttonInteraction.customId === `approve_with_reason_${interactionId}`) {
+            await buttonInteraction.update({
+              content: `✅ **承認済み**\n\n~~${message}~~`,
+              components: [],
+            });
+            return { approved: true, reason: null, timedOut: false };
+          }
+
+          // 否認の場合は Modal で理由を入力
+          const modal = new ModalBuilder()
+            .setCustomId(`deny_reason_modal_${interactionId}`)
+            .setTitle('否認理由');
+
+          const reasonInput = new TextInputBuilder()
+            .setCustomId('deny_reason_input')
+            .setLabel('否認理由を入力してください')
+            .setStyle(TextInputStyle.Paragraph)
+            .setRequired(false)
+            .setPlaceholder('理由を入力（省略可）');
+
+          const modalRow = new ActionRowBuilder<TextInputBuilder>().addComponents(reasonInput);
+          modal.addComponents(modalRow);
+
+          await buttonInteraction.showModal(modal);
+
+          // Modal 送信を待つ
+          try {
+            const modalSubmit = await buttonInteraction.awaitModalSubmit({
+              time: timeoutSec * 1000,
+              filter: (i) => i.customId === `deny_reason_modal_${interactionId}`,
+            });
+
+            const reason = modalSubmit.fields.getTextInputValue('deny_reason_input') || null;
+
+            await modalSubmit.deferUpdate();
+            await sent.edit({
+              content: `❌ **否認済み**\n\n~~${message}~~${reason ? `\n\n**理由:** ${reason}` : ''}`,
+              components: [],
+            });
+
+            return { approved: false, reason, timedOut: false };
+          } catch (modalError) {
+            // Modal タイムアウト
+            const isTimeout =
+              modalError instanceof Error &&
+              (modalError.message.includes('time') || modalError.message.includes('Collector'));
+
+            if (isTimeout) {
+              try {
+                await sent.edit({
+                  content: `⏰ **タイムアウト**\n\n~~${message}~~`,
+                  components: [],
+                });
+              } catch {
+                // メッセージが削除されていた場合など、edit失敗は無視
+              }
+              return { approved: false, reason: null, timedOut: true };
+            }
+
+            const errorMessage = modalError instanceof Error ? modalError.message : 'Unknown error';
+            return { approved: false, reason: null, timedOut: false, error: errorMessage };
+          }
+        } catch (error) {
+          const isTimeout =
+            error instanceof Error &&
+            (error.message.includes('time') || error.message.includes('Collector'));
+
+          if (isTimeout) {
+            try {
+              await sent.edit({
+                content: `⏰ **タイムアウト**\n\n~~${message}~~`,
+                components: [],
+              });
+            } catch {
+              // メッセージが削除されていた場合など、edit失敗は無視
+            }
+            return { approved: false, reason: null, timedOut: true };
+          }
+
+          console.error('sendApprovalWithReasonRequest error:', error);
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+          return { approved: false, reason: null, timedOut: false, error: errorMessage };
+        }
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        return { approved: false, reason: null, timedOut: false, error: errorMessage };
+      }
+    },
+
+    async createThread(name: string, message?: string): Promise<ThreadResult> {
+      if (!ready || !channel) {
+        return { threadId: null, success: false, error: 'Discord not connected' };
+      }
+
+      try {
+        const thread = await channel.threads.create({
+          name: name.slice(0, 100),
+          type: ChannelType.PublicThread,
+          reason: 'Created by discord-approval-mcp',
+        });
+
+        // 初期メッセージがあれば送信
+        if (message) {
+          await thread.send(message);
+        }
+
+        return { threadId: thread.id, success: true };
+      } catch (error) {
+        console.error('createThread error:', error);
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        return { threadId: null, success: false, error: errorMessage };
       }
     },
   };

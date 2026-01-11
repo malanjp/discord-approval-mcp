@@ -75,6 +75,25 @@ export type PollResult = {
 };
 
 /**
+ * 理由付き承認リクエストの結果
+ */
+export type ApprovalWithReasonResult = {
+  approved: boolean;
+  reason: string | null;
+  timedOut: boolean;
+  error?: string;
+};
+
+/**
+ * スレッド作成の結果
+ */
+export type ThreadResult = {
+  threadId: string | null;
+  success: boolean;
+  error?: string;
+};
+
+/**
  * Discord 操作を抽象化するアダプター
  *
  * テスト時にはモック実装を注入することで、
@@ -142,6 +161,18 @@ export type DiscordAdapter = {
     timeoutSec: number
   ) => Promise<PollResult>;
 
+  /** 理由付き承認リクエストを送信し、ユーザーの応答を待つ */
+  sendApprovalWithReasonRequest: (
+    message: string,
+    timeoutSec: number
+  ) => Promise<ApprovalWithReasonResult>;
+
+  /** スレッドを作成する */
+  createThread: (
+    name: string,
+    message?: string
+  ) => Promise<ThreadResult>;
+
   /** Discord に接続する */
   connect: () => Promise<void>;
 
@@ -193,4 +224,12 @@ export type ToolHandlers = {
     maxSelections?: number,
     timeout?: number
   ) => Promise<PollResult>;
+  requestApprovalWithReason: (
+    message: string,
+    timeout?: number
+  ) => Promise<ApprovalWithReasonResult>;
+  createThread: (
+    name: string,
+    message?: string
+  ) => Promise<ThreadResult>;
 };

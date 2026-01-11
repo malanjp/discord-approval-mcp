@@ -10,6 +10,8 @@ import type {
   TextInputResult,
   DiffConfirmResult,
   PollResult,
+  ApprovalWithReasonResult,
+  ThreadResult,
 } from './types.js';
 
 /**
@@ -288,7 +290,64 @@ export function createToolHandlers(adapter: DiscordAdapter): ToolHandlers {
         };
       }
 
+      // バリデーション: timeout
+      if (timeout < 1 || timeout > 900) {
+        return {
+          selected: [],
+          timedOut: false,
+          error: 'タイムアウトは1〜900秒の範囲で指定してください',
+        };
+      }
+
       return adapter.sendPoll(question, options, minSelections, effectiveMaxSelections, timeout);
+    },
+
+    /**
+     * 理由付き承認リクエストを送信し、ユーザーの応答を待つ
+     */
+    async requestApprovalWithReason(
+      message: string,
+      timeout = 300
+    ): Promise<ApprovalWithReasonResult> {
+      if (!adapter.isReady()) {
+        return { approved: false, reason: null, timedOut: false, error: 'Discord not connected' };
+      }
+
+      // バリデーション: message
+      if (!message || message.trim().length === 0) {
+        return { approved: false, reason: null, timedOut: false, error: 'メッセージは必須です' };
+      }
+
+      // バリデーション: timeout
+      if (timeout < 1 || timeout > 900) {
+        return {
+          approved: false,
+          reason: null,
+          timedOut: false,
+          error: 'タイムアウトは1〜900秒の範囲で指定してください',
+        };
+      }
+
+      return adapter.sendApprovalWithReasonRequest(message, timeout);
+    },
+
+    /**
+     * スレッドを作成する
+     */
+    async createThread(name: string, message?: string): Promise<ThreadResult> {
+      if (!adapter.isReady()) {
+        return { threadId: null, success: false, error: 'Discord not connected' };
+      }
+
+      // バリデーション
+      if (!name || name.trim().length === 0) {
+        return { threadId: null, success: false, error: 'スレッド名は必須です' };
+      }
+      if (name.length > 100) {
+        return { threadId: null, success: false, error: 'スレッド名は100文字以内にしてください' };
+      }
+
+      return adapter.createThread(name, message);
     },
   };
 }

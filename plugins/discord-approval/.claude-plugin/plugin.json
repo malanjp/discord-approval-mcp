@@ -5,7 +5,10 @@
   "author": {
     "name": "malan"
   },
+  "homepage": "https://github.com/malanjp/discord-approval-mcp",
   "repository": "https://github.com/malanjp/discord-approval-mcp",
   "license": "MIT",
-  "keywords": ["discord", "approval", "mcp", "notification"]
+  "keywords": ["discord", "approval", "mcp", "notification"],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json"
 }

@@ -1,0 +1,19 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "discord-approval-marketplace",
+  "version": "1.0.0",
+  "description": "Discord経由で承認リクエスト・通知を送信するMCPサーバー",
+  "owner": {
+    "name": "malan",
+    "url": "https://github.com/malanjp"
+  },
+  "plugins": [
+    {
+      "name": "discord-approval",
+      "description": "Discord経由で承認リクエスト・通知を送信するMCPサーバー。Claude Codeから人間の承認を取得するワークフローを実現。",
+      "version": "1.0.0",
+      "source": "./plugins/discord-approval",
+      "category": "productivity"
+    }
+  ]
+}

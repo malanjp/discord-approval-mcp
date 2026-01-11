@@ -9,25 +9,21 @@ An MCP server that sends approval requests and notifications via Discord from Cl
 ### Option A: Plugin Installation (Recommended)
 
 ```bash
-# 1. Clone the repository
-git clone https://github.com/malanjp/discord-approval-mcp.git
-cd discord-approval-mcp
+# 1. Add the marketplace
+claude plugin marketplace add malanjp/discord-approval-mcp
 
-# 2. Build
-npm install
-npm run build
+# 2. Install the plugin
+claude plugin install discord-approval
 
-# 3. Set environment variables
+# 3. Set environment variables (add to ~/.zshrc or similar)
 export DISCORD_BOT_TOKEN="your_bot_token"
 export DISCORD_CHANNEL_ID="your_channel_id"
 
-# 4. Add as Claude Code plugin
-claude plugins:add /path/to/discord-approval-mcp
+# 4. Restart Claude Code
 ```
 
 The plugin automatically:
 - Configures the MCP server
-- Adds hooks for task completion notifications
 - Provides usage guide skill
 
 ### Option B: Manual Setup

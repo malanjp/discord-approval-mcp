@@ -15,9 +15,7 @@ claude plugin marketplace add malanjp/discord-approval-mcp
 # 2. Install the plugin
 claude plugin install discord-approval
 
-# 3. Set environment variables (add to ~/.zshrc or similar)
-export DISCORD_BOT_TOKEN="your_bot_token"
-export DISCORD_CHANNEL_ID="your_channel_id"
+# 3. Set environment variables (see below)
 
 # 4. Restart Claude Code
 ```
@@ -25,6 +23,52 @@ export DISCORD_CHANNEL_ID="your_channel_id"
 The plugin automatically:
 - Configures the MCP server
 - Provides usage guide skill
+
+### Environment Variables Configuration
+
+You need to set `DISCORD_BOT_TOKEN` and `DISCORD_CHANNEL_ID`. Choose one of the following methods:
+
+#### Method 1: Project-local settings (Recommended)
+
+Create `.claude/settings.local.json` in your project root (add to `.gitignore`):
+
+```json
+{
+  "env": {
+    "DISCORD_BOT_TOKEN": "your_bot_token",
+    "DISCORD_CHANNEL_ID": "your_channel_id"
+  }
+}
+```
+
+#### Method 2: User-wide settings
+
+Create or edit `~/.claude/settings.json`:
+
+```json
+{
+  "env": {
+    "DISCORD_BOT_TOKEN": "your_bot_token",
+    "DISCORD_CHANNEL_ID": "your_channel_id"
+  }
+}
+```
+
+#### Method 3: Shell environment variables
+
+Add to `~/.zshrc` or `~/.bashrc`:
+
+```bash
+export DISCORD_BOT_TOKEN="your_bot_token"
+export DISCORD_CHANNEL_ID="your_channel_id"
+```
+
+#### Priority Order (highest to lowest)
+
+1. `.claude/settings.local.json` (project-local, gitignored)
+2. `.claude/settings.json` (project-shared)
+3. `~/.claude/settings.json` (user-wide)
+4. OS environment variables (`~/.zshrc`, etc.)
 
 ### Option B: Manual Setup
 

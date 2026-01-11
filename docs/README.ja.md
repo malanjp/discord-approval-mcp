@@ -15,9 +15,7 @@ claude plugin marketplace add malanjp/discord-approval-mcp
 # 2. プラグインをインストール
 claude plugin install discord-approval
 
-# 3. 環境変数を設定（~/.zshrc などに追加）
-export DISCORD_BOT_TOKEN="your_bot_token"
-export DISCORD_CHANNEL_ID="your_channel_id"
+# 3. 環境変数を設定（下記参照）
 
 # 4. Claude Code を再起動
 ```
@@ -25,6 +23,52 @@ export DISCORD_CHANNEL_ID="your_channel_id"
 プラグインが自動的に:
 - MCP サーバーを設定
 - 利用ガイド skill を提供
+
+### 環境変数の設定
+
+`DISCORD_BOT_TOKEN` と `DISCORD_CHANNEL_ID` を設定する必要があります。以下のいずれかの方法を選択してください。
+
+#### 方法1: プロジェクトローカル設定（推奨）
+
+プロジェクトルートに `.claude/settings.local.json` を作成（`.gitignore` に追加）:
+
+```json
+{
+  "env": {
+    "DISCORD_BOT_TOKEN": "your_bot_token",
+    "DISCORD_CHANNEL_ID": "your_channel_id"
+  }
+}
+```
+
+#### 方法2: ユーザー全体の設定
+
+`~/.claude/settings.json` を作成または編集:
+
+```json
+{
+  "env": {
+    "DISCORD_BOT_TOKEN": "your_bot_token",
+    "DISCORD_CHANNEL_ID": "your_channel_id"
+  }
+}
+```
+
+#### 方法3: シェル環境変数
+
+`~/.zshrc` または `~/.bashrc` に追加:
+
+```bash
+export DISCORD_BOT_TOKEN="your_bot_token"
+export DISCORD_CHANNEL_ID="your_channel_id"
+```
+
+#### 優先順位（高い順）
+
+1. `.claude/settings.local.json`（プロジェクトローカル、gitignore対象）
+2. `.claude/settings.json`（プロジェクト共有）
+3. `~/.claude/settings.json`（ユーザー全体）
+4. OS環境変数（`~/.zshrc` など）
 
 ### 方法B: 手動セットアップ
 

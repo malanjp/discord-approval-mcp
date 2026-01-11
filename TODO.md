@@ -16,14 +16,14 @@
 
 ### 中優先度
 
-- [ ] **`confirm_with_diff`** - Diff 付き確認
+- [x] **`confirm_with_diff`** - Diff 付き確認 ✅
   - Embed + コードブロック
   - パラメータ: `message`, `diff`, `filename?`, `timeout?`
   - 用途: コード変更の承認時に差分を表示
 
-- [ ] **`poll`** - 複数回答可能な投票
-  - StringSelectMenu (maxValues 設定)
-  - パラメータ: `question`, `options`, `max_selections?`, `timeout?`
+- [x] **`poll`** - 複数回答可能な投票 ✅
+  - StringSelectMenu (minValues/maxValues 設定)
+  - パラメータ: `question`, `options`, `min_selections?`, `max_selections?`, `timeout?`
   - 用途: リリース機能選択、優先バグ選択
 
 ### 低優先度

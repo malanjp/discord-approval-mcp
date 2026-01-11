@@ -165,6 +165,65 @@ export function createMcpServer(handlers: ToolHandlers): Server {
           required: ['title', 'prompt'],
         },
       },
+      {
+        name: 'confirm_with_diff',
+        description:
+          'コード変更の差分を表示し、ユーザーに承認を求める。Embed形式で差分を表示し、承認/否認ボタンで応答を待つ。ファイル編集前の確認に使用する。',
+        inputSchema: {
+          type: 'object' as const,
+          properties: {
+            message: {
+              type: 'string',
+              description: '確認内容の説明（何を変更するのかを明確に記述）',
+            },
+            diff: {
+              type: 'string',
+              description: '表示する差分（unified diff 形式推奨）',
+            },
+            filename: {
+              type: 'string',
+              description: 'ファイル名（syntax highlight に使用、オプション）',
+            },
+            timeout: {
+              type: 'number',
+              description: 'タイムアウト秒数（デフォルト300秒、最大900秒）',
+            },
+          },
+          required: ['message', 'diff'],
+        },
+      },
+      {
+        name: 'poll',
+        description:
+          'Discordに複数選択可能な投票を送信し、ユーザーの選択を待つ。複数の選択肢から1つ以上を選んでもらう場合に使用する。',
+        inputSchema: {
+          type: 'object' as const,
+          properties: {
+            question: {
+              type: 'string',
+              description: '質問文',
+            },
+            options: {
+              type: 'array',
+              items: { type: 'string' },
+              description: '選択肢の配列（2〜25個）',
+            },
+            min_selections: {
+              type: 'number',
+              description: '最小選択数（デフォルト0＝選択なしも可）',
+            },
+            max_selections: {
+              type: 'number',
+              description: '最大選択数（デフォルト＝選択肢の数）',
+            },
+            timeout: {
+              type: 'number',
+              description: 'タイムアウト秒数（デフォルト300秒＝5分）',
+            },
+          },
+          required: ['question', 'options'],
+        },
+      },
     ],
   }));
 
@@ -314,6 +373,61 @@ export function createMcpServer(handlers: ToolHandlers): Server {
         responseText = 'キャンセル: ユーザーが入力をキャンセルしました';
       } else {
         responseText = `入力テキスト:\n${result.text}`;
+      }
+
+      return {
+        content: [{ type: 'text', text: responseText }],
+      };
+    }
+
+    if (name === 'confirm_with_diff') {
+      const { message, diff, filename, timeout = 300 } = args as {
+        message: string;
+        diff: string;
+        filename?: string;
+        timeout?: number;
+      };
+      const result = await handlers.confirmWithDiff(message, diff, filename, timeout);
+
+      let responseText: string;
+      if (result.error) {
+        responseText = `エラー: ${result.error}`;
+      } else if (result.timedOut) {
+        responseText = 'タイムアウト: ユーザーからの応答がありませんでした';
+      } else {
+        responseText = result.approved ? '承認されました' : '否認されました';
+      }
+
+      return {
+        content: [{ type: 'text', text: responseText }],
+      };
+    }
+
+    if (name === 'poll') {
+      const { question, options, min_selections, max_selections, timeout = 300 } = args as {
+        question: string;
+        options: string[];
+        min_selections?: number;
+        max_selections?: number;
+        timeout?: number;
+      };
+      const result = await handlers.poll(
+        question,
+        options,
+        min_selections,
+        max_selections,
+        timeout
+      );
+
+      let responseText: string;
+      if (result.error) {
+        responseText = `エラー: ${result.error}`;
+      } else if (result.timedOut) {
+        responseText = 'タイムアウト: ユーザーからの応答がありませんでした';
+      } else if (result.selected.length === 0) {
+        responseText = 'ユーザーは何も選択しませんでした';
+      } else {
+        responseText = `ユーザーの選択 (${result.selected.length}件):\n${result.selected.map((s) => `- ${s}`).join('\n')}`;
       }
 
       return {

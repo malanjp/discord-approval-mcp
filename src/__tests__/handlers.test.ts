@@ -25,6 +25,12 @@ function createMockAdapter(
     sendTextInputRequest: vi
       .fn()
       .mockResolvedValue({ text: 'test input', timedOut: false, cancelled: false }),
+    sendDiffConfirmRequest: vi
+      .fn()
+      .mockResolvedValue({ approved: true, timedOut: false }),
+    sendPoll: vi
+      .fn()
+      .mockResolvedValue({ selected: ['option1'], timedOut: false }),
     connect: vi.fn().mockResolvedValue(undefined),
     disconnect: vi.fn().mockResolvedValue(undefined),
     ...overrides,
@@ -656,6 +662,309 @@ describe('createToolHandlers', () => {
         undefined,
         false,
         300
+      );
+    });
+  });
+
+  describe('confirmWithDiff', () => {
+    it('Discord 未接続時はエラーを返す', async () => {
+      const adapter = createMockAdapter({ isReady: () => false });
+      const handlers = createToolHandlers(adapter);
+
+      const result = await handlers.confirmWithDiff('変更確認', '+ added line');
+
+      expect(result).toEqual({
+        approved: false,
+        timedOut: false,
+        error: 'Discord not connected',
+      });
+      expect(adapter.sendDiffConfirmRequest).not.toHaveBeenCalled();
+    });
+
+    it('message が空の場合はエラーを返す', async () => {
+      const adapter = createMockAdapter();
+      const handlers = createToolHandlers(adapter);
+
+      const result = await handlers.confirmWithDiff('', '+ added line');
+
+      expect(result.error).toBe('メッセージは必須です');
+      expect(adapter.sendDiffConfirmRequest).not.toHaveBeenCalled();
+    });
+
+    it('diff が空の場合はエラーを返す', async () => {
+      const adapter = createMockAdapter();
+      const handlers = createToolHandlers(adapter);
+
+      const result = await handlers.confirmWithDiff('変更確認', '');
+
+      expect(result.error).toBe('diff は必須です');
+      expect(adapter.sendDiffConfirmRequest).not.toHaveBeenCalled();
+    });
+
+    it('タイムアウトが範囲外の場合はエラーを返す（0秒）', async () => {
+      const adapter = createMockAdapter();
+      const handlers = createToolHandlers(adapter);
+
+      const result = await handlers.confirmWithDiff(
+        '変更確認',
+        '+ added line',
+        undefined,
+        0
+      );
+
+      expect(result.error).toBe('タイムアウトは1〜900秒の範囲で指定してください');
+      expect(adapter.sendDiffConfirmRequest).not.toHaveBeenCalled();
+    });
+
+    it('タイムアウトが範囲外の場合はエラーを返す（901秒）', async () => {
+      const adapter = createMockAdapter();
+      const handlers = createToolHandlers(adapter);
+
+      const result = await handlers.confirmWithDiff(
+        '変更確認',
+        '+ added line',
+        undefined,
+        901
+      );
+
+      expect(result.error).toBe('タイムアウトは1〜900秒の範囲で指定してください');
+      expect(adapter.sendDiffConfirmRequest).not.toHaveBeenCalled();
+    });
+
+    it('承認された場合は approved: true を返す', async () => {
+      const adapter = createMockAdapter({
+        sendDiffConfirmRequest: vi
+          .fn()
+          .mockResolvedValue({ approved: true, timedOut: false }),
+      });
+      const handlers = createToolHandlers(adapter);
+
+      const result = await handlers.confirmWithDiff(
+        '変更確認',
+        '+ added line',
+        'test.ts',
+        60
+      );
+
+      expect(result.approved).toBe(true);
+      expect(result.timedOut).toBe(false);
+      expect(adapter.sendDiffConfirmRequest).toHaveBeenCalledWith(
+        '変更確認',
+        '+ added line',
+        'test.ts',
+        60
+      );
+    });
+
+    it('否認された場合は approved: false を返す', async () => {
+      const adapter = createMockAdapter({
+        sendDiffConfirmRequest: vi
+          .fn()
+          .mockResolvedValue({ approved: false, timedOut: false }),
+      });
+      const handlers = createToolHandlers(adapter);
+
+      const result = await handlers.confirmWithDiff('変更確認', '- removed line');
+
+      expect(result.approved).toBe(false);
+      expect(result.timedOut).toBe(false);
+    });
+
+    it('タイムアウト時は timedOut: true を返す', async () => {
+      const adapter = createMockAdapter({
+        sendDiffConfirmRequest: vi
+          .fn()
+          .mockResolvedValue({ approved: false, timedOut: true }),
+      });
+      const handlers = createToolHandlers(adapter);
+
+      const result = await handlers.confirmWithDiff('変更確認', '+ added line');
+
+      expect(result.timedOut).toBe(true);
+    });
+
+    it('デフォルト値が正しく使用される', async () => {
+      const adapter = createMockAdapter();
+      const handlers = createToolHandlers(adapter);
+
+      await handlers.confirmWithDiff('変更確認', '+ added line');
+
+      expect(adapter.sendDiffConfirmRequest).toHaveBeenCalledWith(
+        '変更確認',
+        '+ added line',
+        undefined,
+        300
+      );
+    });
+  });
+
+  describe('poll', () => {
+    it('Discord 未接続時はエラーを返す', async () => {
+      const adapter = createMockAdapter({ isReady: () => false });
+      const handlers = createToolHandlers(adapter);
+
+      const result = await handlers.poll('質問?', ['A', 'B', 'C']);
+
+      expect(result).toEqual({
+        selected: [],
+        timedOut: false,
+        error: 'Discord not connected',
+      });
+      expect(adapter.sendPoll).not.toHaveBeenCalled();
+    });
+
+    it('選択肢が 2 個未満の場合はエラーを返す', async () => {
+      const adapter = createMockAdapter();
+      const handlers = createToolHandlers(adapter);
+
+      const result = await handlers.poll('質問?', ['option1']);
+
+      expect(result.error).toBe('選択肢は2個以上必要です');
+      expect(adapter.sendPoll).not.toHaveBeenCalled();
+    });
+
+    it('選択肢が 25 個を超える場合はエラーを返す', async () => {
+      const adapter = createMockAdapter();
+      const handlers = createToolHandlers(adapter);
+      const options = Array.from({ length: 26 }, (_, i) => `option${i}`);
+
+      const result = await handlers.poll('質問?', options);
+
+      expect(result.error).toBe('選択肢は25個以下にしてください');
+      expect(adapter.sendPoll).not.toHaveBeenCalled();
+    });
+
+    it('選択肢が 25 個ちょうどの場合は正常に動作する', async () => {
+      const adapter = createMockAdapter({
+        sendPoll: vi.fn().mockResolvedValue({ selected: ['option0'], timedOut: false }),
+      });
+      const handlers = createToolHandlers(adapter);
+      const options = Array.from({ length: 25 }, (_, i) => `option${i}`);
+
+      const result = await handlers.poll('質問?', options);
+
+      expect(result.selected).toEqual(['option0']);
+      expect(adapter.sendPoll).toHaveBeenCalled();
+    });
+
+    it('min_selections が負の場合はエラーを返す', async () => {
+      const adapter = createMockAdapter();
+      const handlers = createToolHandlers(adapter);
+
+      const result = await handlers.poll('質問?', ['A', 'B'], -1);
+
+      expect(result.error).toBe('min_selectionsは0以上で指定してください');
+      expect(adapter.sendPoll).not.toHaveBeenCalled();
+    });
+
+    it('min_selections が選択肢数を超える場合はエラーを返す', async () => {
+      const adapter = createMockAdapter();
+      const handlers = createToolHandlers(adapter);
+
+      const result = await handlers.poll('質問?', ['A', 'B'], 3);
+
+      expect(result.error).toBe('min_selectionsは選択肢の数以下にしてください');
+      expect(adapter.sendPoll).not.toHaveBeenCalled();
+    });
+
+    it('max_selections が 1 未満の場合はエラーを返す', async () => {
+      const adapter = createMockAdapter();
+      const handlers = createToolHandlers(adapter);
+
+      const result = await handlers.poll('質問?', ['A', 'B'], 0, 0);
+
+      expect(result.error).toBe('max_selectionsは1以上で指定してください');
+      expect(adapter.sendPoll).not.toHaveBeenCalled();
+    });
+
+    it('max_selections が選択肢数を超える場合はエラーを返す', async () => {
+      const adapter = createMockAdapter();
+      const handlers = createToolHandlers(adapter);
+
+      const result = await handlers.poll('質問?', ['A', 'B'], 0, 5);
+
+      expect(result.error).toBe('max_selectionsは選択肢の数以下にしてください');
+      expect(adapter.sendPoll).not.toHaveBeenCalled();
+    });
+
+    it('min_selections > max_selections の場合はエラーを返す', async () => {
+      const adapter = createMockAdapter();
+      const handlers = createToolHandlers(adapter);
+
+      const result = await handlers.poll('質問?', ['A', 'B', 'C'], 2, 1);
+
+      expect(result.error).toBe('min_selectionsはmax_selections以下にしてください');
+      expect(adapter.sendPoll).not.toHaveBeenCalled();
+    });
+
+    it('複数選択された場合は配列で返す', async () => {
+      const adapter = createMockAdapter({
+        sendPoll: vi.fn().mockResolvedValue({ selected: ['A', 'C'], timedOut: false }),
+      });
+      const handlers = createToolHandlers(adapter);
+
+      const result = await handlers.poll('好きなものは?', ['A', 'B', 'C']);
+
+      expect(result.selected).toEqual(['A', 'C']);
+      expect(adapter.sendPoll).toHaveBeenCalledWith(
+        '好きなものは?',
+        ['A', 'B', 'C'],
+        0,
+        3,
+        300
+      );
+    });
+
+    it('何も選択されなかった場合は空配列を返す', async () => {
+      const adapter = createMockAdapter({
+        sendPoll: vi.fn().mockResolvedValue({ selected: [], timedOut: false }),
+      });
+      const handlers = createToolHandlers(adapter);
+
+      const result = await handlers.poll('質問?', ['A', 'B']);
+
+      expect(result.selected).toEqual([]);
+    });
+
+    it('タイムアウト時は timedOut: true と空配列を返す', async () => {
+      const adapter = createMockAdapter({
+        sendPoll: vi.fn().mockResolvedValue({ selected: [], timedOut: true }),
+      });
+      const handlers = createToolHandlers(adapter);
+
+      const result = await handlers.poll('質問?', ['A', 'B'], 0, 2, 60);
+
+      expect(result.selected).toEqual([]);
+      expect(result.timedOut).toBe(true);
+    });
+
+    it('maxSelections 未指定時は選択肢数がデフォルトになる', async () => {
+      const adapter = createMockAdapter();
+      const handlers = createToolHandlers(adapter);
+
+      await handlers.poll('質問?', ['A', 'B', 'C', 'D']);
+
+      expect(adapter.sendPoll).toHaveBeenCalledWith(
+        '質問?',
+        ['A', 'B', 'C', 'D'],
+        0,
+        4,
+        300
+      );
+    });
+
+    it('カスタムパラメータが正しく渡される', async () => {
+      const adapter = createMockAdapter();
+      const handlers = createToolHandlers(adapter);
+
+      await handlers.poll('質問?', ['A', 'B', 'C'], 1, 2, 120);
+
+      expect(adapter.sendPoll).toHaveBeenCalledWith(
+        '質問?',
+        ['A', 'B', 'C'],
+        1,
+        2,
+        120
       );
     });
   });

@@ -24,6 +24,8 @@ import type {
   CancelReminderResult,
   NotificationStatus,
   TextInputResult,
+  DiffConfirmResult,
+  PollResult,
 } from './types.js';
 
 /**
@@ -485,5 +487,230 @@ export function createDiscordAdapter(config: DiscordAdapterConfig): DiscordAdapt
         return { text: null, timedOut: false, cancelled: false, error: errorMessage };
       }
     },
+
+    async sendDiffConfirmRequest(
+      message: string,
+      diff: string,
+      filename: string | undefined,
+      timeoutSec: number
+    ): Promise<DiffConfirmResult> {
+      if (!ready || !channel) {
+        return { approved: false, timedOut: false, error: 'Discord not connected' };
+      }
+
+      const interactionId = randomUUID();
+      const MAX_DIFF_LENGTH = 1500;
+      const isTruncated = diff.length > MAX_DIFF_LENGTH;
+      const displayDiff = isTruncated
+        ? diff.slice(0, MAX_DIFF_LENGTH) + '\n... (truncated)'
+        : diff;
+
+      try {
+        // Embed を作成
+        const embed = new EmbedBuilder()
+          .setColor(0x5865f2) // Discord Blurple
+          .setTitle('📝 コード変更の確認')
+          .setDescription(message)
+          .setTimestamp();
+
+        // ファイル名がある場合はフィールドに追加
+        if (filename) {
+          embed.addFields({ name: 'ファイル', value: `\`${filename}\``, inline: true });
+        }
+
+        // diff の言語ヒント（syntax highlight 用）
+        const lang = filename ? getLanguageFromFilename(filename) : 'diff';
+        embed.addFields({
+          name: 'Diff',
+          value: `\`\`\`${lang}\n${displayDiff}\n\`\`\``,
+        });
+
+        if (isTruncated) {
+          embed.setFooter({
+            text: `差分が長いため一部省略されています（全${diff.length}文字）`,
+          });
+        }
+
+        // ボタンを作成
+        const approveBtn = new ButtonBuilder()
+          .setCustomId(`diff_approve_${interactionId}`)
+          .setLabel('✅ 承認')
+          .setStyle(ButtonStyle.Success);
+
+        const denyBtn = new ButtonBuilder()
+          .setCustomId(`diff_deny_${interactionId}`)
+          .setLabel('❌ 否認')
+          .setStyle(ButtonStyle.Danger);
+
+        const row = new ActionRowBuilder<ButtonBuilder>().addComponents(approveBtn, denyBtn);
+
+        const sent = await channel.send({
+          embeds: [embed],
+          components: [row],
+        });
+
+        try {
+          const interaction = await sent.awaitMessageComponent({
+            componentType: ComponentType.Button,
+            time: timeoutSec * 1000,
+            filter: (i) =>
+              i.customId === `diff_approve_${interactionId}` ||
+              i.customId === `diff_deny_${interactionId}`,
+          });
+
+          const approved = interaction.customId === `diff_approve_${interactionId}`;
+
+          // 結果を反映して更新
+          const resultEmbed = EmbedBuilder.from(embed)
+            .setColor(approved ? 0x57f287 : 0xed4245)
+            .setTitle(approved ? '✅ 承認済み' : '❌ 否認済み');
+
+          await interaction.update({
+            embeds: [resultEmbed],
+            components: [],
+          });
+
+          return { approved, timedOut: false };
+        } catch (error) {
+          const isTimeout =
+            error instanceof Error &&
+            (error.message.includes('time') || error.message.includes('Collector'));
+
+          if (isTimeout) {
+            const timeoutEmbed = EmbedBuilder.from(embed)
+              .setColor(0x99aab5) // Gray
+              .setTitle('⏰ タイムアウト');
+
+            await sent.edit({
+              embeds: [timeoutEmbed],
+              components: [],
+            });
+            return { approved: false, timedOut: true };
+          }
+
+          console.error('sendDiffConfirmRequest error:', error);
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+          return { approved: false, timedOut: false, error: errorMessage };
+        }
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        return { approved: false, timedOut: false, error: errorMessage };
+      }
+    },
+
+    async sendPoll(
+      question: string,
+      options: string[],
+      minSelections: number,
+      maxSelections: number,
+      timeoutSec: number
+    ): Promise<PollResult> {
+      if (!ready || !channel) {
+        return { selected: [], timedOut: false, error: 'Discord not connected' };
+      }
+
+      try {
+        const selectMenu = new StringSelectMenuBuilder()
+          .setCustomId('poll_select')
+          .setPlaceholder(
+            minSelections > 0
+              ? `${minSelections}〜${maxSelections}個選択してください...`
+              : `最大${maxSelections}個選択できます...`
+          )
+          .setMinValues(minSelections)
+          .setMaxValues(maxSelections)
+          .addOptions(
+            options.map((option) =>
+              new StringSelectMenuOptionBuilder()
+                .setLabel(option.slice(0, 100))
+                .setValue(option.slice(0, 100))
+            )
+          );
+
+        const row = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(selectMenu);
+
+        const sent = await channel.send({
+          content: `📊 **投票**\n\n${question}\n\n_${minSelections > 0 ? `${minSelections}〜` : ''}${maxSelections}個まで選択可能_`,
+          components: [row],
+        });
+
+        try {
+          const interaction = await sent.awaitMessageComponent({
+            componentType: ComponentType.StringSelect,
+            time: timeoutSec * 1000,
+          });
+
+          const selected = interaction.values;
+
+          try {
+            await interaction.update({
+              content: `✅ **回答済み**\n\n${question}\n\n**選択 (${selected.length}件):**\n${selected.map((s) => `・${s}`).join('\n')}`,
+              components: [],
+            });
+          } catch (updateError) {
+            console.error('Failed to update interaction:', updateError);
+          }
+
+          return { selected, timedOut: false };
+        } catch (error) {
+          const isTimeout =
+            error instanceof Error &&
+            (error.message.includes('time') || error.message.includes('Collector'));
+
+          if (isTimeout) {
+            try {
+              await sent.edit({
+                content: `⏰ **タイムアウト**\n\n~~${question}~~`,
+                components: [],
+              });
+            } catch (editError) {
+              console.error('Failed to update message after timeout:', editError);
+            }
+            return { selected: [], timedOut: true };
+          }
+
+          console.error('sendPoll error:', error);
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+          return { selected: [], timedOut: false, error: errorMessage };
+        }
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        return { selected: [], timedOut: false, error: errorMessage };
+      }
+    },
   };
+}
+
+/**
+ * ファイル拡張子から言語を判定するヘルパー
+ */
+function getLanguageFromFilename(filename: string): string {
+  const ext = filename.split('.').pop()?.toLowerCase();
+  const langMap: Record<string, string> = {
+    ts: 'typescript',
+    tsx: 'tsx',
+    js: 'javascript',
+    jsx: 'jsx',
+    py: 'python',
+    rb: 'ruby',
+    go: 'go',
+    rs: 'rust',
+    java: 'java',
+    kt: 'kotlin',
+    swift: 'swift',
+    cs: 'csharp',
+    cpp: 'cpp',
+    c: 'c',
+    h: 'c',
+    md: 'markdown',
+    json: 'json',
+    yaml: 'yaml',
+    yml: 'yaml',
+    toml: 'toml',
+    sql: 'sql',
+    sh: 'bash',
+    bash: 'bash',
+    zsh: 'bash',
+  };
+  return langMap[ext || ''] || 'diff';
 }

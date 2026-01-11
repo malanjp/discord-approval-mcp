@@ -57,6 +57,24 @@ export type TextInputResult = {
 };
 
 /**
+ * Diff 付き確認リクエストの結果
+ */
+export type DiffConfirmResult = {
+  approved: boolean;
+  timedOut: boolean;
+  error?: string;
+};
+
+/**
+ * 複数選択投票の結果
+ */
+export type PollResult = {
+  selected: string[];
+  timedOut: boolean;
+  error?: string;
+};
+
+/**
  * Discord 操作を抽象化するアダプター
  *
  * テスト時にはモック実装を注入することで、
@@ -107,6 +125,23 @@ export type DiscordAdapter = {
     timeoutSec: number
   ) => Promise<TextInputResult>;
 
+  /** Diff 付き確認リクエストを送信し、ユーザーの応答を待つ */
+  sendDiffConfirmRequest: (
+    message: string,
+    diff: string,
+    filename: string | undefined,
+    timeoutSec: number
+  ) => Promise<DiffConfirmResult>;
+
+  /** 複数選択可能な投票を送信し、ユーザーの選択を待つ */
+  sendPoll: (
+    question: string,
+    options: string[],
+    minSelections: number,
+    maxSelections: number,
+    timeoutSec: number
+  ) => Promise<PollResult>;
+
   /** Discord に接続する */
   connect: () => Promise<void>;
 
@@ -145,4 +180,17 @@ export type ToolHandlers = {
     multiline?: boolean,
     timeout?: number
   ) => Promise<TextInputResult>;
+  confirmWithDiff: (
+    message: string,
+    diff: string,
+    filename?: string,
+    timeout?: number
+  ) => Promise<DiffConfirmResult>;
+  poll: (
+    question: string,
+    options: string[],
+    minSelections?: number,
+    maxSelections?: number,
+    timeout?: number
+  ) => Promise<PollResult>;
 };

@@ -4,6 +4,34 @@
 
 Claude CodeからDiscord経由で承認リクエスト・通知を送信するMCPサーバー。
 
+## インストール
+
+### 方法A: プラグインインストール（推奨）
+
+```bash
+# 1. リポジトリをクローン
+git clone https://github.com/malanjp/discord-approval-mcp.git
+cd discord-approval-mcp
+
+# 2. ビルド
+npm install
+npm run build
+
+# 3. 環境変数を設定
+export DISCORD_BOT_TOKEN="your_bot_token"
+export DISCORD_CHANNEL_ID="your_channel_id"
+
+# 4. Claude Code プラグインとして追加
+claude plugins:add /path/to/discord-approval-mcp
+```
+
+プラグインが自動的に:
+- MCP サーバーを設定
+- タスク完了通知用の hooks を追加
+- 利用ガイド skill を提供
+
+### 方法B: 手動セットアップ
+
 ## セットアップ
 
 ### 1. Discord Bot 作成

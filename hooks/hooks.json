@@ -1,0 +1,29 @@
+{
+  "description": "Discord Approval MCP hooks",
+  "hooks": {
+    "Stop": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "prompt",
+            "prompt": "タスクが完了しました。ユーザーへの通知が必要かどうか判断してください。\n\n以下の場合は notify_with_status または notify ツールでDiscordに通知することを推奨します：\n- ビルド、テスト、デプロイなどの長時間タスクが完了した場合\n- 重要なマイルストーンに到達した場合\n- エラーが発生した場合\n\n通知が不要な場合（単純な質問への回答、短い作業など）は何もしなくて構いません。",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "prompt",
+            "prompt": "Discord Approval MCP が利用可能です。以下の場面で積極的に使用してください：\n\n【承認が必要な操作】request_approval\n- 本番環境へのデプロイ前\n- データベースマイグレーション前\n- ファイルの一括削除前\n\n【ユーザーへの質問】schedule_reminder + AskUserQuestion + cancel_reminder\n- 実装方針の確認\n- 曖昧な指示の明確化\n\n【タスク完了通知】notify_with_status\n- ビルド・テスト完了時\n- エラー発生時",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}

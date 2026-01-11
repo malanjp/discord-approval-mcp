@@ -1,0 +1,11 @@
+{
+  "name": "discord-approval",
+  "version": "1.0.0",
+  "description": "Discord経由で承認リクエスト・通知を送信するMCPサーバー",
+  "author": {
+    "name": "malan"
+  },
+  "repository": "https://github.com/malanjp/discord-approval-mcp",
+  "license": "MIT",
+  "keywords": ["discord", "approval", "mcp", "notification"]
+}

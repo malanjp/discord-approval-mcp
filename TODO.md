@@ -44,7 +44,7 @@
 
 ## プラグイン化
 
-- [ ] **Claude Code プラグインとしてパッケージ化**
+- [x] **Claude Code プラグインとしてパッケージ化** ✅
   - plugin.json でMCPサーバー設定を自動化
   - hooks/ で UserPromptSubmit, Stop hooks を内包
   - skills/ で利用ガイドを提供

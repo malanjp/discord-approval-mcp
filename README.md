@@ -128,6 +128,55 @@ Requests text input from the user via Discord Modal dialog.
 
 **Returns**: The entered text / `Cancelled` / `Timeout`
 
+### `confirm_with_diff`
+
+Shows a code diff and requests approval from the user.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| message | string | ✅ | Description of the changes |
+| diff | string | ✅ | The diff to display (unified diff format recommended) |
+| filename | string | - | Filename for syntax highlighting |
+| timeout | number | - | Timeout in seconds (default: 300, max: 900) |
+
+**Returns**: `Approved` / `Denied` / `Timeout`
+
+### `poll`
+
+Sends a poll with multiple selectable options and waits for the user's selection.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| question | string | ✅ | The question to ask |
+| options | string[] | ✅ | Array of choices (2-25 items) |
+| min_selections | number | - | Minimum selections required (default: 0) |
+| max_selections | number | - | Maximum selections allowed (default: all options) |
+| timeout | number | - | Timeout in seconds (default: 300, max: 900) |
+
+**Returns**: Array of selected options / `Timeout`
+
+### `request_approval_with_reason`
+
+Sends an approval request and collects a reason when denied.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| message | string | ✅ | The content to be approved |
+| timeout | number | - | Timeout in seconds (default: 300, max: 900) |
+
+**Returns**: `{ approved: boolean, reason?: string }` / `Timeout`
+
+### `create_thread`
+
+Creates a Discord thread for organizing long task progress.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| name | string | ✅ | Thread name (max 100 characters) |
+| message | string | - | Initial message in the thread |
+
+**Returns**: `{ thread_id: string }` / Error message
+
 ## Usage Example
 
 In Claude Code:
@@ -168,6 +217,22 @@ Use `mcp__discord-approval__request_text_input` when you need free-form text inp
 - Gathering error details from the user
 - Requesting additional requirements
 - Getting commit message modifications
+
+Use `mcp__discord-approval__confirm_with_diff` when showing code changes for approval:
+- Before applying file modifications
+- Reviewing generated code changes
+
+Use `mcp__discord-approval__poll` when multiple selections are needed:
+- Selecting multiple features to implement
+- Choosing which bugs to fix first
+
+Use `mcp__discord-approval__request_approval_with_reason` when you need rejection feedback:
+- Understanding why a change was rejected
+- Collecting improvement suggestions
+
+Use `mcp__discord-approval__create_thread` for organizing long tasks:
+- Multi-step implementation progress
+- Grouping related notifications
 
 ## When to actively use discord approval mcp
 
